@@ -51,6 +51,41 @@ try {
         throw 'build_release_manifest.py falhou.'
     }
 
+    $byteResponseWrapper = Join-Path $temporaryRoot 'byte-response-wrapper.ps1'
+    @'
+param(
+    [string]$UpdaterPath,
+    [string]$InstallRoot,
+    [string]$ManifestFile
+)
+$global:FakeManifestBytes = [System.IO.File]::ReadAllBytes($ManifestFile)
+function global:Invoke-WebRequest {
+    param(
+        [switch]$UseBasicParsing,
+        [string]$Uri
+    )
+    return [pscustomobject]@{ Content = $global:FakeManifestBytes }
+}
+& $UpdaterPath `
+    -InstallRoot $InstallRoot `
+    -ManifestUrl 'https://example.invalid/update.json' `
+    -CheckOnly
+'@ | Set-Content -LiteralPath $byteResponseWrapper -Encoding UTF8
+
+    $byteResponseOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass `
+        -File $byteResponseWrapper `
+        -UpdaterPath (Join-Path $installRoot 'updater\MClonePC-Updater.ps1') `
+        -InstallRoot $installRoot `
+        -ManifestFile $manifestPath 2>&1
+    $byteResponseExitCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($byteResponseExitCode -notin @(0, 10)) {
+        throw "Resposta byte[] não foi aceita: $byteResponseOutput"
+    }
+    if ([string]$byteResponseOutput -notmatch 'DISPONIVEL: 9.2.0 -> 9.2.1') {
+        throw "Resultado inesperado para resposta byte[]: $byteResponseOutput"
+    }
+
     & (Join-Path $installRoot 'updater\MClonePC-Updater.ps1') `
         -InstallRoot $installRoot `
         -ManifestPath $manifestPath `
