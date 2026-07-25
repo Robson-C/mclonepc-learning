@@ -57,12 +57,15 @@ internal static class FakeGame
         -SourceGameDirectory $sourceGame `
         -OutputRoot $outputRoot `
         -Version '9.2.1' `
-        -VersionCode 90201
+        -VersionCode 90201 `
+        -GoogleClientId '123456-test.apps.googleusercontent.com'
 
     $packageRoot = Join-Path $outputRoot 'MClonePC Portable v9.2.1'
     foreach ($required in @(
         'MClonePC.exe',
         'MClonePC-Updater.exe',
+        'MClonePC-Save-Nuvem.exe',
+        'cloud-save.json',
         'game\mclonepc.exe',
         'updater\MClonePC-Updater.ps1',
         'state\installed.json',
@@ -82,6 +85,19 @@ internal static class FakeGame
     )
     if ($scriptLaunchers.Count -ne 0) {
         throw 'O pacote portátil contém .bat ou .cmd.'
+    }
+    $cloudConfig = Get-Content -Raw -LiteralPath (
+        Join-Path $packageRoot 'cloud-save.json'
+    ) | ConvertFrom-Json
+    if (
+        $cloudConfig.google_client_id -ne
+            '123456-test.apps.googleusercontent.com' -or
+        $cloudConfig.google_scope -ne
+            'https://www.googleapis.com/auth/drive.appdata' -or
+        $cloudConfig.save_directory -ne
+            '%APPDATA%\Robson\MClonePC\Documents'
+    ) {
+        throw 'Configuração de save em nuvem divergente.'
     }
     if (@(Get-ChildItem -LiteralPath (
         Join-Path $packageRoot 'backups'

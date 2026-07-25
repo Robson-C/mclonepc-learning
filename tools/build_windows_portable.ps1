@@ -10,7 +10,10 @@ param(
     [string]$Version,
 
     [Parameter(Mandatory = $true)]
-    [int64]$VersionCode
+    [int64]$VersionCode,
+
+    [Parameter(Mandatory = $true)]
+    [string]$GoogleClientId
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,6 +61,15 @@ if (-not (Test-Path -LiteralPath (Join-Path $source 'mclonepc.exe') -PathType Le
     throw 'A pasta fonte não contém mclonepc.exe.'
 }
 if (
+    [string]::IsNullOrWhiteSpace($GoogleClientId) -or
+    -not $GoogleClientId.EndsWith(
+        '.apps.googleusercontent.com',
+        [System.StringComparison]::OrdinalIgnoreCase
+    )
+) {
+    throw 'Google OAuth Client ID ausente ou inválido.'
+}
+if (
     $output.Equals($source, [System.StringComparison]::OrdinalIgnoreCase) -or
     $output.StartsWith(
         $source + '\',
@@ -79,10 +91,18 @@ $updaterLauncherSource = Join-Path (
 $updaterSource = Join-Path (
     $repositoryRoot
 ) 'windows\runtime\MClonePC-Updater.ps1'
+$cloudSaveCoreSource = Join-Path (
+    $repositoryRoot
+) 'windows\cloudsave\MClonePC.CloudSave.Core.cs'
+$cloudSaveAppSource = Join-Path (
+    $repositoryRoot
+) 'windows\cloudsave\MClonePC.CloudSave.App.cs'
 foreach ($requiredSource in @(
     $launcherSource,
     $updaterLauncherSource,
-    $updaterSource
+    $updaterSource,
+    $cloudSaveCoreSource,
+    $cloudSaveAppSource
 )) {
     if (-not (Test-Path -LiteralPath $requiredSource -PathType Leaf)) {
         throw "Fonte autoral ausente: $requiredSource"
@@ -157,6 +177,50 @@ try {
         throw 'Falha ao compilar MClonePC-Updater.exe.'
     }
 
+    $cloudSaveOutput = Join-Path $workingPackage 'MClonePC-Save-Nuvem.exe'
+    $cloudSaveCompilerArguments = @(
+        '/nologo',
+        '/target:winexe',
+        '/platform:anycpu',
+        '/optimize+',
+        '/debug-',
+        '/reference:System.dll',
+        '/reference:System.Core.dll',
+        '/reference:System.Drawing.dll',
+        '/reference:System.Windows.Forms.dll',
+        '/reference:System.Net.Http.dll',
+        '/reference:System.Security.dll',
+        '/reference:System.Web.Extensions.dll',
+        '/reference:System.IO.Compression.dll',
+        '/reference:System.IO.Compression.FileSystem.dll'
+    )
+    if (Test-Path -LiteralPath $iconPath -PathType Leaf) {
+        $cloudSaveCompilerArguments += "/win32icon:$iconPath"
+    }
+    & $compiler @cloudSaveCompilerArguments `
+        "/out:$cloudSaveOutput" `
+        $cloudSaveCoreSource `
+        $cloudSaveAppSource
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Falha ao compilar MClonePC-Save-Nuvem.exe.'
+    }
+
+    $cloudSaveConfig = [ordered]@{
+        schema_version = 1
+        google_client_id = $GoogleClientId
+        google_scope = 'https://www.googleapis.com/auth/drive.appdata'
+        remote_file_name = 'mclonepc-save-v1.zip'
+        save_directory = '%APPDATA%\Robson\MClonePC\Documents'
+    }
+    $cloudSaveConfigPath = Join-Path $workingPackage 'cloud-save.json'
+    $cloudSaveConfigJson = $cloudSaveConfig | ConvertTo-Json -Depth 5
+    $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText(
+        $cloudSaveConfigPath,
+        $cloudSaveConfigJson,
+        $utf8WithoutBom
+    )
+
     $state = [ordered]@{
         schema_version = 1
         version = $Version
@@ -196,6 +260,7 @@ try {
         architecture = 'win32-game-anycpu-launcher'
         entry_point = 'MClonePC.exe'
         updater = 'MClonePC-Updater.exe'
+        cloud_save = 'MClonePC-Save-Nuvem.exe'
         game_file_count = $gameFiles.Count
         game_bytes = $gameBytes
         packaged_at = (Get-Date).ToUniversalTime().ToString('o')
@@ -213,6 +278,11 @@ Jogar:
 
 Atualizar:
   Feche o jogo e execute MClonePC-Updater.exe.
+
+Save em nuvem:
+  Feche o jogo e execute MClonePC-Save-Nuvem.exe.
+  A primeira conexão abre o Google no navegador.
+  Enviar e restaurar são sempre ações manuais nesta versão.
 
 Esta pasta é independente da pasta de desenvolvimento. Mova ou copie a pasta
 inteira; não mova somente os executáveis.

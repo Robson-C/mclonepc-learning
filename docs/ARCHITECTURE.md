@@ -20,8 +20,8 @@ Pacote portátil local
   ZIP acompanhado por SHA-256
 ```
 
-Android e save em nuvem estão congelados no escopo atual. Uma falha de rede
-nunca impede o jogo local de ser aberto.
+Android continua congelado no escopo atual. O save em nuvem é um utilitário
+externo e manual. Uma falha de rede nunca impede o jogo local de ser aberto.
 
 ## Fluxo de atualização
 
@@ -63,6 +63,8 @@ O atualizador nunca executa a build localizada no repositório. Ele só modifica
 MClonePC Portable vX.Y.Z/
   MClonePC.exe
   MClonePC-Updater.exe
+  MClonePC-Save-Nuvem.exe
+  cloud-save.json
   LEIA-ME.txt
   portable-package.json
   game-files.sha256
@@ -75,7 +77,7 @@ MClonePC Portable vX.Y.Z/
   work/
 ```
 
-Os dois arquivos visíveis usados para jogar e atualizar são executáveis
+Os arquivos visíveis usados para jogar, atualizar e sincronizar são executáveis
 compilados. A lógica já auditada do atualizador permanece isolada em
 `updater/`; ela não é o ponto de entrada do usuário. Reescrevê-la em outra
 linguagem exigiria uma auditoria separada e não faz parte deste bloco.
@@ -83,6 +85,22 @@ linguagem exigiria uma auditoria separada e não faz parte deste bloco.
 O launcher calcula a raiz a partir da própria localização e inicia
 `game/mclonepc.exe` com `game/` como diretório de trabalho. Portanto, a pasta
 completa pode mudar de unidade ou diretório sem editar caminhos.
+
+## Save em nuvem no Windows
+
+`MClonePC-Save-Nuvem.exe` não é carregado pelo jogo e não modifica seus
+bytecodes. Ele acessa o save vanilla em
+`%APPDATA%\Robson\MClonePC\Documents` somente quando o processo
+`mclonepc.exe` está fechado.
+
+A autorização usa OAuth 2.0 para aplicativo desktop, PKCE S256 e callback
+loopback. O cliente solicita somente `drive.appdata`. O refresh token é
+protegido por DPAPI para o usuário atual do Windows; o pacote não contém
+client secret.
+
+O envio e a restauração são manuais. Antes de restaurar, o download, o
+manifesto e todos os SHA-256 são validados. O save local anterior é copiado
+para `backups/cloud-save/`, com retenção de três backups.
 
 ## Estados de origem
 
