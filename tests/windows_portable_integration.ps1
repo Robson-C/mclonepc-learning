@@ -52,13 +52,22 @@ internal static class FakeGame
     }
     Set-Content -LiteralPath (Join-Path $sourceGame 'unchanged.txt') `
         -Value 'preserve me' -Encoding UTF8
+    $fakeOAuthCredential = Join-Path $temporaryRoot 'oauth-desktop.json'
+    @'
+{
+  "installed": {
+    "client_id": "123456-test.apps.googleusercontent.com",
+    "client_secret": "test-client-secret"
+  }
+}
+'@ | Set-Content -LiteralPath $fakeOAuthCredential -Encoding UTF8
 
     & (Join-Path $repositoryRoot 'tools\build_windows_portable.ps1') `
         -SourceGameDirectory $sourceGame `
         -OutputRoot $outputRoot `
         -Version '9.2.1' `
         -VersionCode 90201 `
-        -GoogleClientId '123456-test.apps.googleusercontent.com'
+        -GoogleOAuthDesktopJson $fakeOAuthCredential
 
     $packageRoot = Join-Path $outputRoot 'MClonePC Portable v9.2.1'
     foreach ($required in @(
@@ -92,6 +101,8 @@ internal static class FakeGame
     if (
         $cloudConfig.google_client_id -ne
             '123456-test.apps.googleusercontent.com' -or
+        $cloudConfig.google_client_secret -ne
+            'test-client-secret' -or
         $cloudConfig.google_scope -ne
             'https://www.googleapis.com/auth/drive.appdata' -or
         $cloudConfig.save_directory -ne

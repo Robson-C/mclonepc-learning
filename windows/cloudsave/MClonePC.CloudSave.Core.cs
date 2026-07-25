@@ -20,6 +20,7 @@ namespace MClonePC.CloudSave
     {
         public int schema_version { get; set; }
         public string google_client_id { get; set; }
+        public string google_client_secret { get; set; }
         public string google_scope { get; set; }
         public string remote_file_name { get; set; }
         public string save_directory { get; set; }
@@ -54,6 +55,12 @@ namespace MClonePC.CloudSave
             {
                 throw new InvalidDataException(
                     "O Google OAuth Client ID está ausente ou inválido."
+                );
+            }
+            if (String.IsNullOrWhiteSpace(config.google_client_secret))
+            {
+                throw new InvalidDataException(
+                    "O Google OAuth Client Secret está ausente."
                 );
             }
             if (
@@ -412,6 +419,7 @@ namespace MClonePC.CloudSave
             Dictionary<string, string> values =
                 new Dictionary<string, string>();
             values["client_id"] = config.google_client_id;
+            values["client_secret"] = config.google_client_secret;
             values["refresh_token"] = refreshToken;
             values["grant_type"] = "refresh_token";
 
@@ -439,6 +447,7 @@ namespace MClonePC.CloudSave
             Dictionary<string, string> values =
                 new Dictionary<string, string>();
             values["client_id"] = config.google_client_id;
+            values["client_secret"] = config.google_client_secret;
             values["code"] = code;
             values["code_verifier"] = verifier;
             values["redirect_uri"] = redirectUri;

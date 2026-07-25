@@ -95,8 +95,10 @@ bytecodes. Ele acessa o save vanilla em
 
 A autorização usa OAuth 2.0 para aplicativo desktop, PKCE S256 e callback
 loopback. O cliente solicita somente `drive.appdata`. O refresh token é
-protegido por DPAPI para o usuário atual do Windows; o pacote não contém
-client secret.
+protegido por DPAPI para o usuário atual do Windows. O Google exigiu o
+`client_secret` deste cliente desktop na troca de token. Ele é lido de um JSON
+local fora do repositório e existe somente no pacote privado; não é uma chave
+capaz de substituir o consentimento OAuth do usuário.
 
 O envio e a restauração são manuais. Antes de restaurar, o download, o
 manifesto e todos os SHA-256 são validados. O save local anterior é copiado
