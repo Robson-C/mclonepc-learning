@@ -7,17 +7,16 @@ GitHub Repository
   código autoral, contratos, testes e documentação
 
 GitHub Releases
-  APK, pacote Windows, update.json e hashes
+  pacote incremental Windows, update.json e hashes
 
 Instalação local
-  executável/aplicativo e save local persistente
-
-Google Drive appDataFolder
-  cópias privadas e versionadas dos saves do usuário
+  launcher e atualizador fora da pasta game/
+  game/ contém apenas a versão ativa
+  backups/ contém até três versões anteriores
 ```
 
-Atualização do aplicativo e sincronização de save são fluxos independentes.
-Uma falha de rede nunca deve impedir o jogo de carregar o save local.
+Android e save em nuvem estão congelados no escopo atual. Uma falha de rede
+nunca impede o jogo local de ser aberto.
 
 ## Fluxo de atualização
 
@@ -27,30 +26,31 @@ Uma falha de rede nunca deve impedir o jogo de carregar o save local.
 4. Compara `version_code` com a instalação atual.
 5. Baixa o artefato em um arquivo temporário.
 6. Confere tamanho e SHA-256.
-7. Solicita instalação no Android ou aciona o atualizador externo no Windows.
+7. O atualizador externo cria uma cópia de trabalho e aplica o overlay.
 8. Mantém a versão anterior disponível para recuperação.
 
 SHA-256 detecta corrupção, mas não substitui assinatura criptográfica. A
 assinatura do manifesto será adicionada antes de distribuir instaladores para
 terceiros.
 
-## Fluxo de save
+## Separação física no Windows
 
-1. O jogo grava o save local de forma atômica.
-2. Um snapshot é empacotado e recebe SHA-256.
-3. O cliente consulta os metadados remotos.
-4. Se a revisão remota for a esperada, envia o novo snapshot.
-5. Se houver divergência, preserva ambos e apresenta a escolha ao usuário.
-6. Mantém backups anteriores para rollback.
+```text
+merchant_clone/github/mclonepc-learning/
+  repositório, scripts e preparação das próximas versões
 
-O formato inicial trata o save como um pacote opaco. A infraestrutura não
-altera campos internos nem infere o significado de arquivos originais.
+merchant_clone/local_install/MClonePC/
+  Jogar MClonePC.cmd
+  Atualizar MClonePC.cmd
+  updater/
+  game/
+  state/
+  backups/
+  work/
+```
 
-## Plataformas
-
-- Windows: cliente OAuth do tipo Desktop e atualizador externo.
-- Android: cliente OAuth Android e instalador do sistema para APK assinado.
-- Os dois clientes OAuth devem pertencer ao mesmo projeto Google Cloud.
+O atualizador nunca executa a build localizada no repositório. Ele só modifica
+`game/` dentro da instalação local explicitamente indicada.
 
 ## Estados de origem
 
@@ -58,4 +58,3 @@ altera campos internos nem infere o significado de arquivos originais.
 - Código autoral público: ferramentas, integração, contratos e modificações
   explicitamente documentadas.
 - Builds: anexos de Releases, nunca arquivos comuns no histórico Git.
-

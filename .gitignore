@@ -22,6 +22,10 @@ token*.json
 artifacts/
 dist/
 releases/
+local_install/
+work/
+backups/
+state/
 *.apk
 *.aab
 *.exe
@@ -32,4 +36,3 @@ resource.car
 *.lu
 plugin.steamworks.dll
 steam_api.dll
-
