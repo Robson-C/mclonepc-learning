@@ -111,6 +111,7 @@ try {
         -ManifestPath $tamperedManifest `
         -ArtifactDirectory $artifacts 2>$null
     $tamperedExitCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
     $ErrorActionPreference = $previousErrorPreference
     if ($tamperedExitCode -eq 0) {
         throw 'O atualizador aceitou um pacote adulterado.'
