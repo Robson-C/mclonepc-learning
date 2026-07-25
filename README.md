@@ -13,7 +13,7 @@ original.
 - detectar atualizações por um manifesto versionado;
 - verificar tamanho e SHA-256 antes de instalar;
 - preservar saves locais durante atualizações;
-- sincronizar saves entre PC e Android pelo Google Drive `appDataFolder`;
+- sincronizar saves pelo Google Drive `appDataFolder`;
 - documentar toda divergência deliberada da baseline privada.
 
 ## Estado atual
@@ -27,10 +27,11 @@ Bloco inicial concluído:
 - empacotador determinístico de atualizações incrementais;
 - instalador e atualizador externos para Windows;
 - pacote portátil Windows com inicializadores `.exe` compilados;
+- sincronizador manual de save no Google Drive para Windows;
 - testes automatizados;
 - validação contínua pelo GitHub Actions.
 
-Android e save em nuvem estão fora do escopo atual.
+Android continua fora do escopo atual.
 
 ## Testes locais
 
@@ -39,6 +40,7 @@ python -m unittest discover -s tests -v
 python -m compileall -q tools tests
 powershell -NoProfile -File tests/windows_updater_integration.ps1
 powershell -NoProfile -File tests/windows_portable_integration.ps1
+powershell -NoProfile -File tests/windows_cloudsave_integration.ps1
 ```
 
 ## Gerar um manifesto
@@ -94,14 +96,21 @@ powershell -NoProfile -ExecutionPolicy Bypass `
   -File tools/build_windows_portable.ps1 `
   -SourceGameDirectory "C:\caminho\para\game" `
   -OutputRoot "C:\caminho\para\portable" `
-  -Version "9.2.1" `
-  -VersionCode 90201
+  -Version "9.2.2.1" `
+  -VersionCode 9020201 `
+  -GoogleClientId "SEU_CLIENT_ID.apps.googleusercontent.com"
 ```
 
-O resultado possui dois pontos de entrada compilados:
+O resultado possui três pontos de entrada compilados:
 
 - `MClonePC.exe`: inicia `game/mclonepc.exe` usando caminhos relativos;
 - `MClonePC-Updater.exe`: executa o componente de atualização externo.
+- `MClonePC-Save-Nuvem.exe`: envia ou restaura manualmente o save privado no
+  Google Drive `appDataFolder`.
+
+O sincronizador usa OAuth para aplicativo desktop com PKCE e não depende de
+client secret. O refresh token local é protegido pelo DPAPI do Windows. O
+jogo deve estar fechado para enviar ou restaurar.
 
 Não há iniciadores `.bat` ou `.cmd`. A pasta inclui um manifesto SHA-256 de
 todos os arquivos de `game`, estado inicial limpo, `backups/` e `work/` vazios,

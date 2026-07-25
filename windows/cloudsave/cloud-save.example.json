@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "google_client_id": "SEU_CLIENT_ID.apps.googleusercontent.com",
+  "google_scope": "https://www.googleapis.com/auth/drive.appdata",
+  "remote_file_name": "mclonepc-save-v1.zip",
+  "save_directory": "%APPDATA%\\Robson\\MClonePC\\Documents"
+}
