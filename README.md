@@ -26,6 +26,7 @@ Bloco inicial concluído:
 - verificador de manifesto e artefatos;
 - empacotador determinístico de atualizações incrementais;
 - instalador e atualizador externos para Windows;
+- pacote portátil Windows com inicializadores `.exe` compilados;
 - testes automatizados;
 - validação contínua pelo GitHub Actions.
 
@@ -37,6 +38,7 @@ Android e save em nuvem estão fora do escopo atual.
 python -m unittest discover -s tests -v
 python -m compileall -q tools tests
 powershell -NoProfile -File tests/windows_updater_integration.ps1
+powershell -NoProfile -File tests/windows_portable_integration.ps1
 ```
 
 ## Gerar um manifesto
@@ -81,6 +83,34 @@ Na instalação:
 - `backups/` mantém no máximo três versões anteriores;
 - `work/` é temporário;
 - `state/installed.json` registra a versão instalada.
+
+## Pacote portátil Windows
+
+O pacote portátil é montado a partir de uma pasta `game` local previamente
+verificada. O conteúdo de terceiros não é adicionado ao repositório:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File tools/build_windows_portable.ps1 `
+  -SourceGameDirectory "C:\caminho\para\game" `
+  -OutputRoot "C:\caminho\para\portable" `
+  -Version "9.2.1" `
+  -VersionCode 90201
+```
+
+O resultado possui dois pontos de entrada compilados:
+
+- `MClonePC.exe`: inicia `game/mclonepc.exe` usando caminhos relativos;
+- `MClonePC-Updater.exe`: executa o componente de atualização externo.
+
+Não há iniciadores `.bat` ou `.cmd`. A pasta inclui um manifesto SHA-256 de
+todos os arquivos de `game`, estado inicial limpo, `backups/` e `work/` vazios,
+um ZIP e o SHA-256 desse ZIP.
+
+Alvo atual: Windows 10 ou 11 com .NET Framework 4.x habilitado. Os executáveis
+não são assinados digitalmente nesta fase, portanto outro computador pode
+exibir o aviso do Windows SmartScreen. O pacote completo deve permanecer local
+enquanto contiver arquivos de terceiros.
 
 ## Licença
 

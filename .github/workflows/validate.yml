@@ -39,3 +39,7 @@ jobs:
       - name: Test updater integration
         shell: powershell
         run: ./tests/windows_updater_integration.ps1
+
+      - name: Test portable executables
+        shell: powershell
+        run: ./tests/windows_portable_integration.ps1
