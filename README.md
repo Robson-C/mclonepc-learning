@@ -98,7 +98,7 @@ powershell -NoProfile -ExecutionPolicy Bypass `
   -OutputRoot "C:\caminho\para\portable" `
   -Version "9.2.2.1" `
   -VersionCode 9020201 `
-  -GoogleClientId "SEU_CLIENT_ID.apps.googleusercontent.com"
+  -GoogleOAuthDesktopJson "C:\segredos\oauth-desktop.json"
 ```
 
 O resultado possui três pontos de entrada compilados:
@@ -109,8 +109,10 @@ O resultado possui três pontos de entrada compilados:
   Google Drive `appDataFolder`.
 
 O sincronizador usa OAuth para aplicativo desktop com PKCE e não depende de
-client secret. O refresh token local é protegido pelo DPAPI do Windows. O
-jogo deve estar fechado para enviar ou restaurar.
+um segredo publicado no repositório. O Google exigiu o `client_secret` gerado
+para este cliente específico; o empacotador lê um JSON local ignorado pelo Git
+e o inclui somente no pacote privado. O refresh token local é protegido pelo
+DPAPI do Windows. O jogo deve estar fechado para enviar ou restaurar.
 
 Não há iniciadores `.bat` ou `.cmd`. A pasta inclui um manifesto SHA-256 de
 todos os arquivos de `game`, estado inicial limpo, `backups/` e `work/` vazios,

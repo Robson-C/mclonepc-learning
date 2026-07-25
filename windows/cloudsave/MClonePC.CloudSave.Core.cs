@@ -20,6 +20,7 @@ namespace MClonePC.CloudSave
     {
         public int schema_version { get; set; }
         public string google_client_id { get; set; }
+        public string google_client_secret { get; set; }
         public string google_scope { get; set; }
         public string remote_file_name { get; set; }
         public string save_directory { get; set; }
@@ -54,6 +55,12 @@ namespace MClonePC.CloudSave
             {
                 throw new InvalidDataException(
                     "O Google OAuth Client ID está ausente ou inválido."
+                );
+            }
+            if (String.IsNullOrWhiteSpace(config.google_client_secret))
+            {
+                throw new InvalidDataException(
+                    "O Google OAuth Client Secret está ausente."
                 );
             }
             if (
@@ -302,7 +309,7 @@ namespace MClonePC.CloudSave
                 Task<HttpListenerContext> callbackTask =
                     listener.GetContextAsync();
                 Task timeoutTask = Task.Delay(
-                    TimeSpan.FromMinutes(5),
+                    TimeSpan.FromMinutes(15),
                     cancellationToken
                 );
                 Task completed = await Task.WhenAny(
@@ -314,7 +321,7 @@ namespace MClonePC.CloudSave
                     listener.Abort();
                     cancellationToken.ThrowIfCancellationRequested();
                     throw new TimeoutException(
-                        "A autorização do Google expirou após cinco minutos."
+                        "A autorização do Google expirou após quinze minutos."
                     );
                 }
 
@@ -412,6 +419,7 @@ namespace MClonePC.CloudSave
             Dictionary<string, string> values =
                 new Dictionary<string, string>();
             values["client_id"] = config.google_client_id;
+            values["client_secret"] = config.google_client_secret;
             values["refresh_token"] = refreshToken;
             values["grant_type"] = "refresh_token";
 
@@ -439,6 +447,7 @@ namespace MClonePC.CloudSave
             Dictionary<string, string> values =
                 new Dictionary<string, string>();
             values["client_id"] = config.google_client_id;
+            values["client_secret"] = config.google_client_secret;
             values["code"] = code;
             values["code_verifier"] = verifier;
             values["redirect_uri"] = redirectUri;
@@ -550,15 +559,21 @@ namespace MClonePC.CloudSave
                 .Replace('/', '_');
         }
 
-        private static string SafeGoogleError(string json)
+        internal static string SafeGoogleError(string json)
         {
             try
             {
                 Dictionary<string, object> root = DeserializeObject(json);
+                string description = GetString(
+                    root,
+                    "error_description"
+                );
                 object errorValue;
                 if (!root.TryGetValue("error", out errorValue))
                 {
-                    return "resposta sem detalhes";
+                    return String.IsNullOrWhiteSpace(description)
+                        ? "resposta sem detalhes"
+                        : description;
                 }
                 Dictionary<string, object> nested =
                     errorValue as Dictionary<string, object>;
@@ -570,7 +585,10 @@ namespace MClonePC.CloudSave
                         return message;
                     }
                 }
-                return Convert.ToString(errorValue);
+                string errorCode = Convert.ToString(errorValue);
+                return String.IsNullOrWhiteSpace(description)
+                    ? errorCode
+                    : errorCode + ": " + description;
             }
             catch
             {

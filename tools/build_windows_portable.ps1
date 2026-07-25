@@ -13,7 +13,7 @@ param(
     [int64]$VersionCode,
 
     [Parameter(Mandatory = $true)]
-    [string]$GoogleClientId
+    [string]$GoogleOAuthDesktopJson
 )
 
 $ErrorActionPreference = 'Stop'
@@ -60,14 +60,26 @@ if (-not (Test-Path -LiteralPath $source -PathType Container)) {
 if (-not (Test-Path -LiteralPath (Join-Path $source 'mclonepc.exe') -PathType Leaf)) {
     throw 'A pasta fonte não contém mclonepc.exe.'
 }
+$oauthCredentialPath = Get-NormalizedFullPath -Path $GoogleOAuthDesktopJson
+if (-not (Test-Path -LiteralPath $oauthCredentialPath -PathType Leaf)) {
+    throw "JSON OAuth desktop ausente: $oauthCredentialPath"
+}
+$oauthCredential = Get-Content -Raw -LiteralPath $oauthCredentialPath |
+    ConvertFrom-Json
+if ($null -eq $oauthCredential.installed) {
+    throw 'O JSON OAuth deve conter uma credencial do tipo installed.'
+}
+$googleClientId = [string]$oauthCredential.installed.client_id
+$googleClientSecret = [string]$oauthCredential.installed.client_secret
 if (
-    [string]::IsNullOrWhiteSpace($GoogleClientId) -or
-    -not $GoogleClientId.EndsWith(
+    [string]::IsNullOrWhiteSpace($googleClientId) -or
+    -not $googleClientId.EndsWith(
         '.apps.googleusercontent.com',
         [System.StringComparison]::OrdinalIgnoreCase
-    )
+    ) -or
+    [string]::IsNullOrWhiteSpace($googleClientSecret)
 ) {
-    throw 'Google OAuth Client ID ausente ou inválido.'
+    throw 'O JSON OAuth desktop não contém Client ID e Client Secret válidos.'
 }
 if (
     $output.Equals($source, [System.StringComparison]::OrdinalIgnoreCase) -or
@@ -207,7 +219,8 @@ try {
 
     $cloudSaveConfig = [ordered]@{
         schema_version = 1
-        google_client_id = $GoogleClientId
+        google_client_id = $googleClientId
+        google_client_secret = $googleClientSecret
         google_scope = 'https://www.googleapis.com/auth/drive.appdata'
         remote_file_name = 'mclonepc-save-v1.zip'
         save_directory = '%APPDATA%\Robson\MClonePC\Documents'

@@ -37,6 +37,7 @@ internal static class CloudSaveSelfTest
             configPath,
             "{\"schema_version\":1," +
             "\"google_client_id\":\"123-test.apps.googleusercontent.com\"," +
+            "\"google_client_secret\":\"test-secret\"," +
             "\"google_scope\":\"https://www.googleapis.com/auth/" +
             "drive.appdata\"," +
             "\"remote_file_name\":\"mclonepc-save-v1.zip\"," +
@@ -49,6 +50,19 @@ internal static class CloudSaveSelfTest
         {
             throw new InvalidOperationException(
                 "A configuração válida não foi carregada."
+            );
+        }
+        string oauthError = GoogleOAuthClient.SafeGoogleError(
+            "{\"error\":\"invalid_request\"," +
+            "\"error_description\":\"Missing required parameter\"}"
+        );
+        if (
+            oauthError !=
+                "invalid_request: Missing required parameter"
+        )
+        {
+            throw new InvalidOperationException(
+                "A descrição detalhada do erro OAuth foi descartada."
             );
         }
 
