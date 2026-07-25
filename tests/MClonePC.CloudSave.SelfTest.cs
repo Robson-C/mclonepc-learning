@@ -81,6 +81,7 @@ internal static class CloudSaveSelfTest
                 "Metadados do pacote criado são inválidos."
             );
         }
+        TestDriveListResponse();
 
         ValidatedSaveBundle validated = bundles.ValidateAndExtract(
             created.FilePath,
@@ -190,6 +191,49 @@ internal static class CloudSaveSelfTest
 
         Console.WriteLine("WINDOWS_CLOUDSAVE_INTEGRATION_OK");
         return 0;
+    }
+
+    private static void TestDriveListResponse()
+    {
+        string response =
+            "{\"files\":[{\"id\":\"remote-save-1\"," +
+            "\"name\":\"mclonepc-save-v1.zip\"," +
+            "\"modifiedTime\":\"2026-07-25T20:14:03Z\"," +
+            "\"size\":\"2852\",\"appProperties\":{" +
+            "\"bundleSha256\":\"" + new string('a', 64) + "\"," +
+            "\"saveFingerprint\":\"" + new string('b', 64) + "\"," +
+            "\"revision\":\"2\"}}," +
+            "{\"id\":\"remote-save-older\"," +
+            "\"name\":\"mclonepc-save-v1.zip\"," +
+            "\"modifiedTime\":\"2026-07-25T20:11:50Z\"," +
+            "\"size\":\"883\",\"appProperties\":{" +
+            "\"revision\":\"1\"}}]}";
+        RemoteSaveFile remote =
+            GoogleDriveAppDataClient.ParseFirstRemoteFile(response);
+        if (
+            remote == null ||
+            remote.Id != "remote-save-1" ||
+            remote.Name != "mclonepc-save-v1.zip" ||
+            remote.Size != 2852 ||
+            remote.Revision != 2 ||
+            remote.BundleSha256 != new string('a', 64) ||
+            remote.Fingerprint != new string('b', 64)
+        )
+        {
+            throw new InvalidOperationException(
+                "A lista JSON válida do Drive foi descartada."
+            );
+        }
+        if (
+            GoogleDriveAppDataClient.ParseFirstRemoteFile(
+                "{\"files\":[]}"
+            ) != null
+        )
+        {
+            throw new InvalidOperationException(
+                "Uma lista vazia do Drive não retornou nulo."
+            );
+        }
     }
 
     private static void ExpectInvalidData(Action action, string message)

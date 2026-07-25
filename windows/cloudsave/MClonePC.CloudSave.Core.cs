@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -692,21 +693,35 @@ namespace MClonePC.CloudSave
             {
                 string json = await response.Content.ReadAsStringAsync();
                 EnsureSuccess(response, json, "listar o save na nuvem");
-
-                Dictionary<string, object> root =
-                    GoogleOAuthClient.DeserializeObject(json);
-                object filesValue;
-                object[] files = root.TryGetValue("files", out filesValue)
-                    ? filesValue as object[]
-                    : null;
-                if (files == null || files.Length == 0)
-                {
-                    return null;
-                }
-                Dictionary<string, object> file =
-                    files[0] as Dictionary<string, object>;
-                return file == null ? null : ParseRemoteFile(file);
+                return ParseFirstRemoteFile(json);
             }
+        }
+
+        internal static RemoteSaveFile ParseFirstRemoteFile(string json)
+        {
+            Dictionary<string, object> root =
+                GoogleOAuthClient.DeserializeObject(json);
+            object filesValue;
+            IEnumerable files = root.TryGetValue(
+                "files",
+                out filesValue
+            )
+                ? filesValue as IEnumerable
+                : null;
+            if (files == null)
+            {
+                return null;
+            }
+            foreach (object value in files)
+            {
+                Dictionary<string, object> file =
+                    value as Dictionary<string, object>;
+                if (file != null)
+                {
+                    return ParseRemoteFile(file);
+                }
+            }
+            return null;
         }
 
         public async Task<RemoteSaveFile> UploadAsync(
