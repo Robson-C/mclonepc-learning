@@ -302,7 +302,7 @@ namespace MClonePC.CloudSave
                 Task<HttpListenerContext> callbackTask =
                     listener.GetContextAsync();
                 Task timeoutTask = Task.Delay(
-                    TimeSpan.FromMinutes(5),
+                    TimeSpan.FromMinutes(15),
                     cancellationToken
                 );
                 Task completed = await Task.WhenAny(
@@ -314,7 +314,7 @@ namespace MClonePC.CloudSave
                     listener.Abort();
                     cancellationToken.ThrowIfCancellationRequested();
                     throw new TimeoutException(
-                        "A autorização do Google expirou após cinco minutos."
+                        "A autorização do Google expirou após quinze minutos."
                     );
                 }
 
@@ -550,15 +550,21 @@ namespace MClonePC.CloudSave
                 .Replace('/', '_');
         }
 
-        private static string SafeGoogleError(string json)
+        internal static string SafeGoogleError(string json)
         {
             try
             {
                 Dictionary<string, object> root = DeserializeObject(json);
+                string description = GetString(
+                    root,
+                    "error_description"
+                );
                 object errorValue;
                 if (!root.TryGetValue("error", out errorValue))
                 {
-                    return "resposta sem detalhes";
+                    return String.IsNullOrWhiteSpace(description)
+                        ? "resposta sem detalhes"
+                        : description;
                 }
                 Dictionary<string, object> nested =
                     errorValue as Dictionary<string, object>;
@@ -570,7 +576,10 @@ namespace MClonePC.CloudSave
                         return message;
                     }
                 }
-                return Convert.ToString(errorValue);
+                string errorCode = Convert.ToString(errorValue);
+                return String.IsNullOrWhiteSpace(description)
+                    ? errorCode
+                    : errorCode + ": " + description;
             }
             catch
             {

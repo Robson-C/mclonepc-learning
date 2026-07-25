@@ -51,6 +51,19 @@ internal static class CloudSaveSelfTest
                 "A configuração válida não foi carregada."
             );
         }
+        string oauthError = GoogleOAuthClient.SafeGoogleError(
+            "{\"error\":\"invalid_request\"," +
+            "\"error_description\":\"Missing required parameter\"}"
+        );
+        if (
+            oauthError !=
+                "invalid_request: Missing required parameter"
+        )
+        {
+            throw new InvalidOperationException(
+                "A descrição detalhada do erro OAuth foi descartada."
+            );
+        }
 
         SaveBundleService bundles = new SaveBundleService(
             "0123456789abcdef0123456789abcdef"
