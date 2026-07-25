@@ -1,0 +1,35 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Credenciais, saves e chaves privadas nunca entram no repositório.
+.env
+.env.*
+credentials/
+secrets/
+saves/
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+client_secret*.json
+token*.json
+
+# Artefatos são publicados por GitHub Releases, não pelo histórico Git.
+artifacts/
+dist/
+releases/
+*.apk
+*.aab
+*.exe
+*.msi
+
+# Arquivos proprietários/originais não fazem parte deste repositório.
+resource.car
+*.lu
+plugin.steamworks.dll
+steam_api.dll
+

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Robson-C/mclonepc-learning/schemas/update.schema.json",
+  "title": "MClonePC update manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "version",
+    "version_code",
+    "channel",
+    "published_at",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "version_code": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "channel": {
+      "enum": ["stable", "beta", "development"]
+    },
+    "published_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "minimum_supported_version_code": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "release_notes": {
+      "type": "string"
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["platform", "filename", "url", "size", "sha256"],
+        "properties": {
+          "platform": {
+            "enum": ["windows-x64", "android"]
+          },
+          "filename": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  }
+}
+

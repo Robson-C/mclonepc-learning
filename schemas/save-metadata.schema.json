@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Robson-C/mclonepc-learning/schemas/save-metadata.schema.json",
+  "title": "MClonePC cloud save metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "slot",
+    "revision",
+    "save_schema",
+    "game_version",
+    "platform",
+    "device_id",
+    "updated_at",
+    "size",
+    "sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "slot": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,32}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "save_schema": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "game_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content_version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "platform": {
+      "enum": ["windows", "android"]
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "size": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "previous_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}
+
