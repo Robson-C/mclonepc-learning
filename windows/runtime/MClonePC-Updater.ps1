@@ -80,7 +80,13 @@ else {
         throw 'O manifesto remoto precisa usar HTTPS.'
     }
     $response = Invoke-WebRequest -UseBasicParsing -Uri $ManifestUrl
-    $manifest = $response.Content | ConvertFrom-Json
+    if ($response.Content -is [byte[]]) {
+        $manifestJson = [System.Text.Encoding]::UTF8.GetString($response.Content)
+    }
+    else {
+        $manifestJson = [string]$response.Content
+    }
+    $manifest = $manifestJson | ConvertFrom-Json
 }
 
 if ($manifest.schema_version -ne 1) {
@@ -217,4 +223,3 @@ finally {
         Remove-Item -Recurse -Force -LiteralPath $operationRoot
     }
 }
-
