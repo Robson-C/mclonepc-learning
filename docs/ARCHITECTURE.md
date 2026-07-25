@@ -13,6 +13,11 @@ Instalação local
   launcher e atualizador fora da pasta game/
   game/ contém apenas a versão ativa
   backups/ contém até três versões anteriores
+
+Pacote portátil local
+  MClonePC.exe e MClonePC-Updater.exe compilados
+  conteúdo completo mantido fora do repositório público
+  ZIP acompanhado por SHA-256
 ```
 
 Android e save em nuvem estão congelados no escopo atual. Uma falha de rede
@@ -51,6 +56,33 @@ merchant_clone/local_install/MClonePC/
 
 O atualizador nunca executa a build localizada no repositório. Ele só modifica
 `game/` dentro da instalação local explicitamente indicada.
+
+## Distribuição portátil
+
+```text
+MClonePC Portable vX.Y.Z/
+  MClonePC.exe
+  MClonePC-Updater.exe
+  LEIA-ME.txt
+  portable-package.json
+  game-files.sha256
+  updater/
+    MClonePC-Updater.ps1
+  game/
+  state/
+    installed.json
+  backups/
+  work/
+```
+
+Os dois arquivos visíveis usados para jogar e atualizar são executáveis
+compilados. A lógica já auditada do atualizador permanece isolada em
+`updater/`; ela não é o ponto de entrada do usuário. Reescrevê-la em outra
+linguagem exigiria uma auditoria separada e não faz parte deste bloco.
+
+O launcher calcula a raiz a partir da própria localização e inicia
+`game/mclonepc.exe` com `game/` como diretório de trabalho. Portanto, a pasta
+completa pode mudar de unidade ou diretório sem editar caminhos.
 
 ## Estados de origem
 
