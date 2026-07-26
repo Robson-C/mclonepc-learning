@@ -113,7 +113,6 @@ internal static class FakeGame
     $packageRoot = Join-Path $outputRoot 'MClonePC Portable v9.2.1'
     foreach ($required in @(
         'MClonePC.exe',
-        'MClonePC-Updater.exe',
         'MClonePC-Save-Nuvem.exe',
         'cloud-save.json',
         'game\mclonepc.exe',
@@ -128,6 +127,11 @@ internal static class FakeGame
         ))) {
             throw "Arquivo portátil ausente: $required"
         }
+    }
+    if (Test-Path -LiteralPath (
+        Join-Path $packageRoot 'MClonePC-Updater.exe'
+    )) {
+        throw 'O pacote ainda expoe um atualizador separado.'
     }
 
     $scriptLaunchers = @(
@@ -184,6 +188,23 @@ internal static class FakeGame
     $launcherStartInfo.EnvironmentVariables['LOCALAPPDATA'] = Join-Path (
         $temporaryRoot
     ) 'localappdata'
+    $launcherStartInfo.EnvironmentVariables[
+        'MCLONEPC_CLOUD_BRIDGE_DISABLED'
+    ] = '1'
+    $currentManifest = Join-Path $temporaryRoot 'current-update.json'
+    @'
+{
+  "schema_version": 1,
+  "version": "9.2.1",
+  "version_code": 90201,
+  "channel": "development",
+  "published_at": "2026-07-26T00:00:00Z",
+  "artifacts": []
+}
+'@ | Set-Content -LiteralPath $currentManifest -Encoding UTF8
+    $launcherStartInfo.EnvironmentVariables[
+        'MCLONEPC_UPDATE_MANIFEST_PATH'
+    ] = $currentManifest
     $launcher = [System.Diagnostics.Process]::Start($launcherStartInfo)
     $launcher.WaitForExit()
     if ($launcher.ExitCode -ne 0) {
@@ -191,7 +212,7 @@ internal static class FakeGame
     }
 
     $launcherMarker = Join-Path $packageRoot 'game\launcher-test.txt'
-    $deadline = (Get-Date).AddSeconds(5)
+    $deadline = (Get-Date).AddSeconds(15)
     while (
         -not (Test-Path -LiteralPath $launcherMarker) -and
         (Get-Date) -lt $deadline
@@ -211,43 +232,145 @@ internal static class FakeGame
     }
     if (
         $launcherResult -notmatch (
-            '\|argumento simples\|com espaco\|bridge-ready' +
-            '\|bridge-request-served$'
+            '\|argumento simples\|com espaco\|bridge-missing' +
+            '\|bridge-request-missed$'
         )
     ) {
         throw "Argumentos divergentes: $launcherResult"
     }
 
-    @'
-param([string]$InstallRoot)
-Set-Content -LiteralPath (
-    Join-Path $InstallRoot 'state\updater-launcher-test.txt'
-) -Value $InstallRoot -Encoding UTF8
-Write-Output 'ATUALIZADOR_FALSO_OK'
-'@ | Set-Content -LiteralPath (
-        Join-Path $packageRoot 'updater\MClonePC-Updater.ps1'
-    ) -Encoding UTF8
+    Remove-Item -Force -LiteralPath $launcherMarker
+    $offlineStartInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $offlineStartInfo.FileName = Join-Path $packageRoot 'MClonePC.exe'
+    $offlineStartInfo.UseShellExecute = $false
+    $offlineStartInfo.EnvironmentVariables['APPDATA'] = Join-Path (
+        $temporaryRoot
+    ) 'appdata'
+    $offlineStartInfo.EnvironmentVariables['LOCALAPPDATA'] = Join-Path (
+        $temporaryRoot
+    ) 'localappdata'
+    $offlineStartInfo.EnvironmentVariables[
+        'MCLONEPC_CLOUD_BRIDGE_DISABLED'
+    ] = '1'
+    $offlineStartInfo.EnvironmentVariables[
+        'MCLONEPC_UPDATE_MANIFEST_URL'
+    ] = 'https://127.0.0.1:9/update.json'
+    $offlineStartInfo.EnvironmentVariables[
+        'MCLONEPC_UPDATE_CHECK_TIMEOUT_MS'
+    ] = '500'
+    $offlineTimer = [System.Diagnostics.Stopwatch]::StartNew()
+    $offlineLauncher = [System.Diagnostics.Process]::Start($offlineStartInfo)
+    $offlineLauncher.WaitForExit()
+    $offlineTimer.Stop()
+    if ($offlineLauncher.ExitCode -ne 0) {
+        throw "Launcher offline terminou em $($offlineLauncher.ExitCode)."
+    }
+    $deadline = (Get-Date).AddSeconds(15)
+    while (
+        -not (Test-Path -LiteralPath $launcherMarker) -and
+        (Get-Date) -lt $deadline
+    ) {
+        Start-Sleep -Milliseconds 50
+    }
+    if (-not (Test-Path -LiteralPath $launcherMarker)) {
+        throw 'Falha de rede impediu a abertura do jogo.'
+    }
+    if ($offlineTimer.ElapsedMilliseconds -gt 5000) {
+        throw (
+            'A verificação offline excedeu o limite aceitável: ' +
+            "$($offlineTimer.ElapsedMilliseconds) ms."
+        )
+    }
 
-    $updaterLauncher = Start-Process -FilePath (
-        Join-Path $packageRoot 'MClonePC-Updater.exe'
-    ) -ArgumentList '--silent' -PassThru -Wait
-    if ($updaterLauncher.ExitCode -ne 0) {
-        throw "Updater launcher terminou com código $($updaterLauncher.ExitCode)."
+    $updatePayload = Join-Path $temporaryRoot 'startup-update-payload'
+    $updateArtifacts = Join-Path $temporaryRoot 'startup-update-artifacts'
+    Copy-Item -Recurse -LiteralPath (
+        Join-Path $packageRoot 'game'
+    ) -Destination $updatePayload
+    New-Item -ItemType Directory -Path $updateArtifacts | Out-Null
+    Remove-Item -Force -LiteralPath (
+        Join-Path $updatePayload 'launcher-test.txt'
+    )
+    @'
+{
+  "schema_version": 1,
+  "version": "9.2.2",
+  "version_code": 90202
+}
+'@ | Set-Content -LiteralPath (
+        Join-Path $updatePayload 'MClonePC.version.json'
+    ) -Encoding UTF8
+    Set-Content -LiteralPath (
+        Join-Path $updatePayload 'startup-update-applied.txt'
+    ) -Value 'updated before game startup' -Encoding UTF8
+    $updatePackage = Join-Path (
+        $updateArtifacts
+    ) 'MClonePC-Windows-v9.2.2.zip'
+    python (Join-Path $repositoryRoot 'tools\build_update_package.py') `
+        --payload-directory $updatePayload `
+        --version 9.2.2 `
+        --version-code 90202 `
+        --from-version-code 90201 `
+        --output $updatePackage
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Falha ao criar atualização automática de teste.'
     }
-    $updaterMarker = Join-Path (
-        $packageRoot
-    ) 'state\updater-launcher-test.txt'
-    if (-not (Test-Path -LiteralPath $updaterMarker -PathType Leaf)) {
-        throw 'O updater launcher não executou seu componente interno.'
+    $startupManifest = Join-Path $updateArtifacts 'update.json'
+    python (Join-Path $repositoryRoot 'tools\build_release_manifest.py') `
+        --version 9.2.2 `
+        --version-code 90202 `
+        --repository Robson-C/mclonepc-learning `
+        --channel development `
+        --artifact "windows-x64=$updatePackage" `
+        --output $startupManifest
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Falha ao criar manifesto automático de teste.'
     }
-    $reportedRoot = (Get-Content -Raw -LiteralPath $updaterMarker).Trim()
-    $reportedRootFull = [System.IO.Path]::GetFullPath($reportedRoot).TrimEnd('\')
-    $packageRootFull = [System.IO.Path]::GetFullPath($packageRoot).TrimEnd('\')
-    if (-not $reportedRootFull.Equals(
-        $packageRootFull,
-        [System.StringComparison]::OrdinalIgnoreCase
-    )) {
-        throw "InstallRoot divergente: $reportedRoot"
+
+    Remove-Item -Force -LiteralPath $launcherMarker
+    $updateLaunchInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $updateLaunchInfo.FileName = Join-Path $packageRoot 'MClonePC.exe'
+    $updateLaunchInfo.UseShellExecute = $false
+    $updateLaunchInfo.EnvironmentVariables['APPDATA'] = Join-Path (
+        $temporaryRoot
+    ) 'appdata'
+    $updateLaunchInfo.EnvironmentVariables['LOCALAPPDATA'] = Join-Path (
+        $temporaryRoot
+    ) 'localappdata'
+    $updateLaunchInfo.EnvironmentVariables[
+        'MCLONEPC_CLOUD_BRIDGE_DISABLED'
+    ] = '1'
+    $updateLaunchInfo.EnvironmentVariables[
+        'MCLONEPC_UPDATE_MANIFEST_PATH'
+    ] = $startupManifest
+    $updateLaunchInfo.EnvironmentVariables[
+        'MCLONEPC_UPDATE_ARTIFACT_DIRECTORY'
+    ] = $updateArtifacts
+    $updateLauncher = [System.Diagnostics.Process]::Start($updateLaunchInfo)
+    $updateLauncher.WaitForExit()
+    if ($updateLauncher.ExitCode -ne 0) {
+        throw "Launcher com update terminou em $($updateLauncher.ExitCode)."
+    }
+    $deadline = (Get-Date).AddSeconds(20)
+    while (
+        -not (Test-Path -LiteralPath $launcherMarker) -and
+        (Get-Date) -lt $deadline
+    ) {
+        Start-Sleep -Milliseconds 50
+    }
+    if (-not (Test-Path -LiteralPath $launcherMarker)) {
+        throw 'O jogo não iniciou depois da atualização automática.'
+    }
+    if (-not (Test-Path -LiteralPath (
+        Join-Path $packageRoot 'game\startup-update-applied.txt'
+    ))) {
+        throw 'A atualização automática não foi aplicada antes do jogo.'
+    }
+    $updatedState = Get-Content -Raw -LiteralPath (
+        Join-Path $packageRoot 'state\installed.json'
+    ) | ConvertFrom-Json
+    if ($updatedState.version_code -ne 90202) {
+        throw 'O estado instalado não avançou para 90202.'
     }
 
     $archive = Join-Path $outputRoot 'MClonePC-Portable-Windows-v9.2.1.zip'

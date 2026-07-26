@@ -25,3 +25,8 @@ invasor conseguir substituir o manifesto e o artefato, o hash sozinho não
 protege a atualização. O fluxo de produção deverá validar uma assinatura
 assimétrica do manifesto usando apenas uma chave pública embutida no cliente.
 
+No Android há uma segunda barreira: o APK baixado precisa ter o mesmo pacote e
+o mesmo conjunto de certificados da versão instalada. No Windows, enquanto os
+executáveis e o manifesto não tiverem assinatura assimétrica, a proteção
+continua limitada a HTTPS, tamanho e SHA-256. Não tratar essa fase como uma
+cadeia de atualização autenticada contra comprometimento do manifesto.

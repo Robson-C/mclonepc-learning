@@ -26,6 +26,8 @@ try {
     New-Item -ItemType Directory -Path $payloadRoot | Out-Null
     Set-Content -LiteralPath (Join-Path $payloadRoot 'MClonePC.version.json') `
         -Value '{"version":"9.2.1","version_code":90201}' -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $installRoot 'game\obsolete.txt') `
+        -Value 'precisa desaparecer na substituição completa' -Encoding UTF8
 
     New-Item -ItemType Directory -Path $artifacts | Out-Null
     $packagePath = Join-Path $artifacts 'MClonePC-Windows-v9.2.1.zip'
@@ -102,10 +104,11 @@ function global:Invoke-WebRequest {
     ))) {
         throw 'O payload não foi aplicado.'
     }
-    if ((Get-Content -Raw -LiteralPath (
-        Join-Path $installRoot 'game\unchanged.txt'
-    )).Trim() -ne 'preserve me') {
-        throw 'Um arquivo não relacionado foi alterado.'
+    if (Test-Path -LiteralPath (Join-Path $installRoot 'game\obsolete.txt')) {
+        throw 'A atualização completa preservou indevidamente um arquivo obsoleto.'
+    }
+    if (Test-Path -LiteralPath (Join-Path $installRoot 'game\unchanged.txt')) {
+        throw 'Um arquivo ausente do pacote completo foi preservado.'
     }
     $backupCount = @(Get-ChildItem -LiteralPath (
         Join-Path $installRoot 'backups'

@@ -4,6 +4,10 @@ param(
     [string]$ManifestUrl = 'https://github.com/Robson-C/mclonepc-learning/releases/latest/download/update.json',
     [string]$ManifestPath,
     [string]$ArtifactDirectory,
+    [ValidateRange(1, 30)]
+    [int]$ManifestTimeoutSeconds = 2,
+    [ValidateRange(10, 1800)]
+    [int]$DownloadTimeoutSeconds = 300,
     [switch]$CheckOnly
 )
 
@@ -60,6 +64,26 @@ function Get-Sha256Lower {
     return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
 }
 
+function Test-InstalledGameIsRunning {
+    param([Parameter(Mandatory = $true)][string]$GameDirectory)
+    $gameRoot = (Get-FullPath -Path $GameDirectory).TrimEnd('\') + '\'
+    foreach ($process in @(Get-Process -Name 'mclonepc' -ErrorAction SilentlyContinue)) {
+        try {
+            $executablePath = [string]$process.MainModule.FileName
+            if ($executablePath -and (Get-FullPath -Path $executablePath).StartsWith(
+                $gameRoot,
+                [System.StringComparison]::OrdinalIgnoreCase
+            )) {
+                return $true
+            }
+        }
+        catch {
+            # Um processo de outra conta/instalação não deve bloquear este pacote.
+        }
+    }
+    return $false
+}
+
 $installRootFull = Get-FullPath -Path $InstallRoot
 $gameDirectory = Join-Path $installRootFull 'game'
 $statePath = Join-Path $installRootFull 'state\installed.json'
@@ -79,7 +103,8 @@ else {
     if (-not $ManifestUrl.StartsWith('https://')) {
         throw 'O manifesto remoto precisa usar HTTPS.'
     }
-    $response = Invoke-WebRequest -UseBasicParsing -Uri $ManifestUrl
+    $response = Invoke-WebRequest -UseBasicParsing -Uri $ManifestUrl `
+        -TimeoutSec $ManifestTimeoutSeconds
     if ($response.Content -is [byte[]]) {
         $manifestJson = [System.Text.Encoding]::UTF8.GetString($response.Content)
     }
@@ -108,7 +133,7 @@ if ($CheckOnly) {
     exit 10
 }
 
-if (Get-Process -Name 'mclonepc' -ErrorAction SilentlyContinue) {
+if (Test-InstalledGameIsRunning -GameDirectory $gameDirectory) {
     throw 'Feche o MClonePC antes de atualizar.'
 }
 
@@ -131,7 +156,8 @@ try {
         if (-not ([string]$artifact.url).StartsWith('https://')) {
             throw 'A URL do artefato precisa usar HTTPS.'
         }
-        Invoke-WebRequest -UseBasicParsing -Uri $artifact.url -OutFile $downloadPath
+        Invoke-WebRequest -UseBasicParsing -Uri $artifact.url `
+            -OutFile $downloadPath -TimeoutSec $DownloadTimeoutSeconds
     }
 
     $actualSize = (Get-Item -LiteralPath $downloadPath).Length
@@ -150,6 +176,10 @@ try {
 
     if ($package.schema_version -ne 1) {
         throw 'schema_version do pacote não suportado.'
+    }
+    $packageMode = [string]$package.mode
+    if ($packageMode -notin @('full-replacement', 'incremental-overlay')) {
+        throw "Modo do pacote não suportado: $packageMode"
     }
     if (
         [int64]$package.version_code -ne [int64]$manifest.version_code -or
@@ -175,7 +205,12 @@ try {
         }
     }
 
-    Copy-Item -Recurse -LiteralPath $gameDirectory -Destination $stagingGame
+    if ($packageMode -eq 'incremental-overlay') {
+        Copy-Item -Recurse -LiteralPath $gameDirectory -Destination $stagingGame
+    }
+    else {
+        New-Item -ItemType Directory -Path $stagingGame | Out-Null
+    }
     foreach ($file in @($package.files)) {
         $payloadFile = Assert-ChildPath -Root $payloadRoot -RelativePath $file.path
         $destination = Assert-ChildPath -Root $stagingGame -RelativePath $file.path

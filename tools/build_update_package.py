@@ -57,6 +57,7 @@ def build_package_manifest(
     version: str,
     version_code: int,
     supported_from_version_codes: list[int],
+    mode: str = "full-replacement",
 ) -> dict[str, object]:
     if not SEMVER_PATTERN.fullmatch(version):
         raise PackageError("version precisa seguir MAJOR.MINOR.PATCH")
@@ -67,9 +68,12 @@ def build_package_manifest(
         raise PackageError("informe ao menos um version_code de origem válido")
     if any(value >= version_code for value in supported):
         raise PackageError("versões de origem precisam ser menores que o destino")
+    if mode not in {"full-replacement", "incremental-overlay"}:
+        raise PackageError(f"modo de pacote não suportado: {mode}")
 
     return {
         "schema_version": PACKAGE_SCHEMA_VERSION,
+        "mode": mode,
         "version": version,
         "version_code": version_code,
         "supported_from_version_codes": supported,
@@ -110,7 +114,7 @@ def write_package(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Cria um pacote incremental seguro para o atualizador Windows."
+        description="Cria um pacote seguro para o atualizador Windows."
     )
     parser.add_argument("--payload-directory", required=True, type=Path)
     parser.add_argument("--version", required=True)
@@ -122,6 +126,15 @@ def main() -> int:
         type=int,
         help="Pode ser repetido para permitir mais de uma versão instalada.",
     )
+    parser.add_argument(
+        "--mode",
+        choices=("full-replacement", "incremental-overlay"),
+        default="full-replacement",
+        help=(
+            "full-replacement substitui integralmente a pasta game; "
+            "incremental-overlay preserva arquivos ausentes do payload."
+        ),
+    )
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
@@ -131,6 +144,7 @@ def main() -> int:
             version=args.version,
             version_code=args.version_code,
             supported_from_version_codes=args.from_version_code,
+            mode=args.mode,
         )
         write_package(
             payload_directory=args.payload_directory,
