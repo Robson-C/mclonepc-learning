@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using MClonePC.CloudSave;
 
@@ -46,12 +47,17 @@ internal static class CloudSaveSelfTest
             new UTF8Encoding(false)
         );
         CloudSaveConfig config = CloudSaveConfig.Load(configPath);
-        if (config.remote_file_name != "mclonepc-save-v1.zip")
+        if (
+            config.remote_file_name != "mclonepc-save-v1.zip" ||
+            config.game_remote_file_name !=
+                "mclonepc-game-cloud-v1.json"
+        )
         {
             throw new InvalidOperationException(
                 "A configuração válida não foi carregada."
             );
         }
+        TestGamePayloadValidation();
         string oauthError = GoogleOAuthClient.SafeGoogleError(
             "{\"error\":\"invalid_request\"," +
             "\"error_description\":\"Missing required parameter\"}"
@@ -234,6 +240,52 @@ internal static class CloudSaveSelfTest
                 "Uma lista vazia do Drive não retornou nulo."
             );
         }
+    }
+
+    private static void TestGamePayloadValidation()
+    {
+        MethodInfo validate = typeof(CloudSaveBridge).GetMethod(
+            "ValidatePayload",
+            BindingFlags.NonPublic | BindingFlags.Static
+        );
+        if (validate == null)
+        {
+            throw new InvalidOperationException(
+                "Validador do payload interno não foi encontrado."
+            );
+        }
+        validate.Invoke(
+            null,
+            new object[]
+            {
+                Encoding.UTF8.GetBytes(
+                    "{\"schema_version\":1,\"gameData\":{},\"info\":{}}"
+                )
+            }
+        );
+        try
+        {
+            validate.Invoke(
+                null,
+                new object[]
+                {
+                    Encoding.UTF8.GetBytes(
+                        "{\"schema_version\":1,\"gameData\":{}}"
+                    )
+                }
+            );
+        }
+        catch (TargetInvocationException exception)
+        {
+            if (exception.InnerException is InvalidDataException)
+            {
+                return;
+            }
+            throw;
+        }
+        throw new InvalidOperationException(
+            "Payload interno incompleto foi aceito."
+        );
     }
 
     private static void ExpectInvalidData(Action action, string message)

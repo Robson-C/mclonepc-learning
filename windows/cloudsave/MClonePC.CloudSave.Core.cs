@@ -24,6 +24,7 @@ namespace MClonePC.CloudSave
         public string google_client_secret { get; set; }
         public string google_scope { get; set; }
         public string remote_file_name { get; set; }
+        public string game_remote_file_name { get; set; }
         public string save_directory { get; set; }
 
         public static CloudSaveConfig Load(string path)
@@ -84,6 +85,20 @@ namespace MClonePC.CloudSave
             {
                 throw new InvalidDataException(
                     "Nome remoto inválido para o pacote de save."
+                );
+            }
+            if (String.IsNullOrWhiteSpace(config.game_remote_file_name))
+            {
+                config.game_remote_file_name =
+                    "mclonepc-game-cloud-v1.json";
+            }
+            if (
+                Path.GetFileName(config.game_remote_file_name) !=
+                    config.game_remote_file_name
+            )
+            {
+                throw new InvalidDataException(
+                    "Nome remoto inválido para o save interno do jogo."
                 );
             }
             if (String.IsNullOrWhiteSpace(config.save_directory))
@@ -731,7 +746,8 @@ namespace MClonePC.CloudSave
             string bundleSha256,
             string fingerprint,
             int revision,
-            CancellationToken cancellationToken
+            CancellationToken cancellationToken,
+            string mediaType = "application/zip"
         )
         {
             Dictionary<string, object> metadata =
@@ -762,7 +778,7 @@ namespace MClonePC.CloudSave
                 );
                 ByteArrayContent bundleContent = new ByteArrayContent(bundle);
                 bundleContent.Headers.ContentType =
-                    new MediaTypeHeaderValue("application/zip");
+                    new MediaTypeHeaderValue(mediaType);
                 multipart.Add(metadataContent);
                 multipart.Add(bundleContent);
 

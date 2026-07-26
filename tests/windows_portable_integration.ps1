@@ -76,6 +76,7 @@ internal static class FakeGame
         'MClonePC-Save-Nuvem.exe',
         'cloud-save.json',
         'game\mclonepc.exe',
+        'game\MClonePC.version.json',
         'updater\MClonePC-Updater.ps1',
         'state\installed.json',
         'portable-package.json',
@@ -105,10 +106,21 @@ internal static class FakeGame
             'test-client-secret' -or
         $cloudConfig.google_scope -ne
             'https://www.googleapis.com/auth/drive.appdata' -or
+        $cloudConfig.game_remote_file_name -ne
+            'mclonepc-game-cloud-v1.json' -or
         $cloudConfig.save_directory -ne
             '%APPDATA%\Robson\MClonePC\Documents'
     ) {
         throw 'Configuração de save em nuvem divergente.'
+    }
+    $gameVersion = Get-Content -Raw -LiteralPath (
+        Join-Path $packageRoot 'game\MClonePC.version.json'
+    ) | ConvertFrom-Json
+    if (
+        $gameVersion.version -ne '9.2.1' -or
+        $gameVersion.version_code -ne 90201
+    ) {
+        throw 'Metadados da versão do jogo divergentes.'
     }
     if (@(Get-ChildItem -LiteralPath (
         Join-Path $packageRoot 'backups'
