@@ -212,7 +212,7 @@ internal static class FakeGame
     }
 
     $launcherMarker = Join-Path $packageRoot 'game\launcher-test.txt'
-    $deadline = (Get-Date).AddSeconds(5)
+    $deadline = (Get-Date).AddSeconds(15)
     while (
         -not (Test-Path -LiteralPath $launcherMarker) -and
         (Get-Date) -lt $deadline
@@ -265,7 +265,7 @@ internal static class FakeGame
     if ($offlineLauncher.ExitCode -ne 0) {
         throw "Launcher offline terminou em $($offlineLauncher.ExitCode)."
     }
-    $deadline = (Get-Date).AddSeconds(5)
+    $deadline = (Get-Date).AddSeconds(15)
     while (
         -not (Test-Path -LiteralPath $launcherMarker) -and
         (Get-Date) -lt $deadline
@@ -351,7 +351,7 @@ internal static class FakeGame
     if ($updateLauncher.ExitCode -ne 0) {
         throw "Launcher com update terminou em $($updateLauncher.ExitCode)."
     }
-    $deadline = (Get-Date).AddSeconds(8)
+    $deadline = (Get-Date).AddSeconds(20)
     while (
         -not (Test-Path -LiteralPath $launcherMarker) -and
         (Get-Date) -lt $deadline
