@@ -24,9 +24,10 @@ Bloco inicial concluído:
 - contrato JSON de metadados de save;
 - gerador de manifesto de release;
 - verificador de manifesto e artefatos;
-- empacotador determinístico de atualizações incrementais;
-- instalador e atualizador externos para Windows;
+- empacotador determinístico de atualização completa ou incremental;
+- verificação e atualização integradas ao ponto de entrada Windows;
 - pacote portátil Windows com inicializadores `.exe` compilados;
+- verificação e instalação integradas ao ponto de entrada Android;
 - sincronizador manual de save no Google Drive para Windows;
 - testes automatizados;
 - validação contínua pelo GitHub Actions.
@@ -119,12 +120,17 @@ powershell -NoProfile -ExecutionPolicy Bypass `
   -GoogleOAuthDesktopJson "C:\segredos\oauth-desktop.json"
 ```
 
-O resultado possui três pontos de entrada compilados:
+O resultado possui dois pontos de entrada compilados:
 
-- `MClonePC.exe`: inicia `game/mclonepc.exe` usando caminhos relativos;
-- `MClonePC-Updater.exe`: executa o componente de atualização externo.
+- `MClonePC.exe`: verifica a versão em até 2,5 segundos, atualiza a pasta
+  `game/` integralmente quando necessário e inicia `game/mclonepc.exe`;
 - `MClonePC-Save-Nuvem.exe`: envia ou restaura manualmente o save privado no
   Google Drive `appDataFolder`.
+
+Não existe um executável de atualização separado. A lógica interna permanece
+em `updater/`, invisível ao uso normal. Falha de rede ou timeout são
+`fail-open`: o jogo instalado abre normalmente. A tela preta com
+`Atualizando...` só aparece depois que uma versão superior foi confirmada.
 
 O sincronizador usa OAuth para aplicativo desktop com PKCE e não depende de
 um segredo publicado no repositório. O Google exigiu o `client_secret` gerado
@@ -140,6 +146,19 @@ Alvo atual: Windows 10 ou 11 com .NET Framework 4.x habilitado. Os executáveis
 não são assinados digitalmente nesta fase, portanto outro computador pode
 exibir o aviso do Windows SmartScreen. O pacote completo deve permanecer local
 enquanto contiver arquivos de terceiros.
+
+## Entrada Android e atualização
+
+O APK usa `UpdateGateActivity` como única atividade `MAIN/LAUNCHER`. Ela faz a
+mesma consulta curta antes de iniciar o Solar2D. Sem atualização, sem rede ou
+após 2,5 segundos, a atividade abre o jogo instalado. Quando existe versão
+superior, mostra `Atualizando...`, baixa o APK, confere tamanho, SHA-256,
+pacote, `versionCode` e o mesmo certificado da instalação atual.
+
+O Android exige confirmação do usuário para instalar uma atualização fora de
+uma loja. O aplicativo pode abrir essa confirmação, mas não pode ignorá-la.
+Depois da instalação, tenta abrir a versão nova; algumas versões do Android
+podem exigir que o usuário pressione **Abrir**.
 
 ## Licença
 

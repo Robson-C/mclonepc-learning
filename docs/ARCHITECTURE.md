@@ -7,15 +7,16 @@ GitHub Repository
   código autoral, contratos, testes e documentação
 
 GitHub Releases
-  pacote incremental Windows, update.json e hashes
+  pacote completo Windows, APK Android, update.json e hashes
 
 Instalação local
-  launcher e atualizador fora da pasta game/
+  MClonePC.exe é o único ponto de entrada visível
+  lógica interna do atualizador fora da pasta game/
   game/ contém apenas a versão ativa
   backups/ contém até três versões anteriores
 
 Pacote portátil local
-  MClonePC.exe e MClonePC-Updater.exe compilados
+  MClonePC.exe com verificação inicial integrada
   conteúdo completo mantido fora do repositório público
   ZIP acompanhado por SHA-256
 ```
@@ -50,8 +51,15 @@ Núcleo privado versionado
 4. Compara `version_code` com a instalação atual.
 5. Baixa o artefato em um arquivo temporário.
 6. Confere tamanho e SHA-256.
-7. O atualizador externo cria uma cópia de trabalho e aplica o overlay.
-8. Mantém a versão anterior disponível para recuperação.
+7. No Windows, o componente interno monta uma nova pasta `game/`; um pacote
+   `full-replacement` não preserva arquivos obsoletos.
+8. No Android, `PackageInstaller` valida e substitui o APK depois da
+   confirmação obrigatória do usuário.
+9. Mantém a versão Windows anterior disponível para recuperação.
+
+A consulta inicial tem limite rígido de 2,5 segundos e é `fail-open`: falha de
+rede, timeout ou manifesto inválido não bloqueiam a versão instalada. A tela
+preta `Atualizando...` só é exibida depois de confirmar uma versão superior.
 
 SHA-256 detecta corrupção, mas não substitui assinatura criptográfica. A
 assinatura do manifesto será adicionada antes de distribuir instaladores para
@@ -81,7 +89,6 @@ O atualizador nunca executa a build localizada no repositório. Ele só modifica
 ```text
 MClonePC Portable vX.Y.Z/
   MClonePC.exe
-  MClonePC-Updater.exe
   MClonePC-Save-Nuvem.exe
   cloud-save.json
   LEIA-ME.txt
@@ -96,14 +103,27 @@ MClonePC Portable vX.Y.Z/
   work/
 ```
 
-Os arquivos visíveis usados para jogar, atualizar e sincronizar são executáveis
-compilados. A lógica já auditada do atualizador permanece isolada em
-`updater/`; ela não é o ponto de entrada do usuário. Reescrevê-la em outra
-linguagem exigiria uma auditoria separada e não faz parte deste bloco.
+Os arquivos visíveis usados para jogar e sincronizar são executáveis
+compilados. A lógica de atualização permanece isolada em `updater/`, mas é
+chamada automaticamente pelo próprio `MClonePC.exe`; ela não é um ponto de
+entrada separado do usuário.
 
 O launcher calcula a raiz a partir da própria localização e inicia
 `game/mclonepc.exe` com `game/` como diretório de trabalho. Portanto, a pasta
 completa pode mudar de unidade ou diretório sem editar caminhos.
+
+## Entrada Android
+
+O APK declara `UpdateGateActivity` como a única atividade
+`MAIN/LAUNCHER`. `CoronaActivity` permanece no manifesto sem o filtro de
+inicialização. Quando não existe atualização, o gate abre diretamente a
+atividade do Solar2D.
+
+Quando existe atualização, o gate valida o artefato Android do mesmo
+`update.json`, baixa para o cache e exige coincidência exata de pacote,
+`versionCode` e conjunto de certificados antes de criar uma sessão
+`PackageInstaller`. A confirmação visual do instalador é uma exigência do
+Android para aplicativos comuns distribuídos fora de loja.
 
 ## Save em nuvem no Windows
 

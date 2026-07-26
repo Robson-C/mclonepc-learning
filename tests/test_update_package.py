@@ -66,6 +66,7 @@ class UpdatePackageTests(unittest.TestCase):
             )
             stored = json.loads(archive.read("package.json"))
             self.assertEqual(90201, stored["version_code"])
+            self.assertEqual("full-replacement", stored["mode"])
             self.assertEqual(2, len(stored["files"]))
 
     def test_empty_payload_is_rejected(self) -> None:

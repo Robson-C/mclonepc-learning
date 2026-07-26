@@ -98,9 +98,6 @@ foreach ($target in @($packageDirectory, $archivePath, $archiveHashPath)) {
 }
 
 $launcherSource = Join-Path $repositoryRoot 'windows\launcher\MClonePC.Launcher.cs'
-$updaterLauncherSource = Join-Path (
-    $repositoryRoot
-) 'windows\launcher\MClonePC.UpdaterLauncher.cs'
 $updaterSource = Join-Path (
     $repositoryRoot
 ) 'windows\runtime\MClonePC-Updater.ps1'
@@ -115,7 +112,6 @@ $cloudSaveBridgeSource = Join-Path (
 ) 'windows\cloudsave\MClonePC.CloudSave.Bridge.cs'
 foreach ($requiredSource in @(
     $launcherSource,
-    $updaterLauncherSource,
     $updaterSource,
     $cloudSaveCoreSource,
     $cloudSaveAppSource,
@@ -187,6 +183,7 @@ try {
         '/optimize+',
         '/debug-',
         '/reference:System.dll',
+        '/reference:System.Drawing.dll',
         '/reference:System.Windows.Forms.dll'
     )
     if (Test-Path -LiteralPath $iconPath -PathType Leaf) {
@@ -197,14 +194,6 @@ try {
     & $compiler @commonCompilerArguments "/out:$launcherOutput" $launcherSource
     if ($LASTEXITCODE -ne 0) {
         throw 'Falha ao compilar MClonePC.exe.'
-    }
-
-    $updaterLauncherOutput = Join-Path $workingPackage 'MClonePC-Updater.exe'
-    & $compiler @commonCompilerArguments `
-        "/out:$updaterLauncherOutput" `
-        $updaterLauncherSource
-    if ($LASTEXITCODE -ne 0) {
-        throw 'Falha ao compilar MClonePC-Updater.exe.'
     }
 
     $cloudSaveOutput = Join-Path $workingPackage 'MClonePC-Save-Nuvem.exe'
@@ -291,7 +280,7 @@ try {
         version_code = $VersionCode
         architecture = 'win32-game-anycpu-launcher'
         entry_point = 'MClonePC.exe'
-        updater = 'MClonePC-Updater.exe'
+        updater = 'integrated-in-MClonePC.exe'
         cloud_save = 'MClonePC-Save-Nuvem.exe'
         game_file_count = $gameFiles.Count
         game_bytes = $gameBytes
@@ -309,7 +298,9 @@ Jogar:
   Execute MClonePC.exe.
 
 Atualizar:
-  Feche o jogo e execute MClonePC-Updater.exe.
+  Abra MClonePC.exe normalmente. Antes do jogo, ele faz uma checagem curta.
+  Se houver atualização, mostra "Atualizando..." e inicia a versão nova.
+  Se não houver atualização ou a rede falhar, o jogo abre normalmente.
 
 Save em nuvem:
   No jogo, abra Opções > Salvar na Nuvem.
