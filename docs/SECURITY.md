@@ -18,6 +18,12 @@
 - tokens são armazenados no mecanismo seguro disponível em cada sistema;
 - logs não registram tokens, conteúdo integral do save ou dados pessoais.
 
+O cliente Android não deve conter o `client_secret` do cliente OAuth desktop.
+Aplicativos instalados não conseguem manter esse valor secreto. A autorização
+Android deve usar Google Identity Services e a identidade registrada por
+pacote + SHA-1. Também é proibido usar callback OAuth em `localhost` no
+Android; esse fluxo foi descontinuado pelo Google para clientes móveis.
+
 ## Limite do SHA-256
 
 O hash garante que o arquivo baixado corresponde ao manifesto recebido. Se um
