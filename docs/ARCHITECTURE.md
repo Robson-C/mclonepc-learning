@@ -125,6 +125,20 @@ Quando existe atualização, o gate valida o artefato Android do mesmo
 `PackageInstaller`. A confirmação visual do instalador é uma exigência do
 Android para aplicativos comuns distribuídos fora de loja.
 
+## Transporte de nuvem Android
+
+`plugin.mclonecloud.LuaLoader` liga o módulo Lua adaptado à implementação
+Android. `AndroidCloudClient` pede autorização no momento em que o usuário toca
+em conectar, por meio de Google Identity Services `AuthorizationClient`.
+Depois do consentimento, o token de acesso é usado diretamente nas chamadas
+REST do Drive.
+
+O transporte Android preserva o mesmo arquivo, payload, revisão e
+`appProperties` do transporte Windows. A autorização é própria da plataforma:
+não há processo auxiliar, servidor de loopback, refresh token autoral ou
+`client_secret` no APK. O Google Play Services conserva a concessão e fornece
+um token atualizado nas operações seguintes.
+
 ## Save em nuvem no Windows
 
 `MClonePC-Save-Nuvem.exe` não é carregado pelo jogo e não modifica seus

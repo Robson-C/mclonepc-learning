@@ -160,6 +160,18 @@ uma loja. O aplicativo pode abrir essa confirmação, mas não pode ignorá-la.
 Depois da instalação, tenta abrir a versão nova; algumas versões do Android
 podem exigir que o usuário pressione **Abrir**.
 
+## Save em nuvem no Android
+
+O adaptador em `android/cloudsave` expõe ao Lua o mesmo contrato de operações
+usado no Windows: `connect`, `verify`, `status`, `upload`, `download` e
+`logout`. A autorização usa o `AuthorizationClient` oficial do Google Identity
+Services e solicita somente o escopo `drive.appdata`.
+
+O APK não contém segredo OAuth nem executa callback em `localhost`. O projeto
+Google precisa ter um cliente OAuth do tipo Android registrado para o pacote e
+o SHA-1 da assinatura do APK. O conteúdo continua no arquivo privado
+`mclonepc-game-cloud-v1.json` dentro de `appDataFolder`.
+
 ## Licença
 
 Uma licença para o código autoral ainda não foi escolhida. Publicar o
