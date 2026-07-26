@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
 
 [assembly: AssemblyTitle("MClonePC")]
@@ -34,6 +35,7 @@ namespace MClonePC.Portable
 
             try
             {
+                StartCloudBridge(installRoot);
                 ProcessStartInfo startInfo = new ProcessStartInfo();
                 startInfo.FileName = gameExecutable;
                 startInfo.WorkingDirectory = gameDirectory;
@@ -53,6 +55,49 @@ namespace MClonePC.Portable
                     "Não foi possível iniciar o MClonePC.\r\n\r\n" +
                     exception.Message
                 );
+            }
+        }
+
+        private static void StartCloudBridge(string installRoot)
+        {
+            string executable = Path.Combine(
+                installRoot,
+                "MClonePC-Save-Nuvem.exe"
+            );
+            if (!File.Exists(executable))
+            {
+                return;
+            }
+            string stateDirectory = Path.Combine(installRoot, "state");
+            Directory.CreateDirectory(stateDirectory);
+            string readyPath = Path.Combine(
+                stateDirectory,
+                "cloud-bridge.ready"
+            );
+            ProcessStartInfo startInfo = new ProcessStartInfo();
+            startInfo.FileName = executable;
+            startInfo.WorkingDirectory = installRoot;
+            startInfo.UseShellExecute = false;
+            startInfo.CreateNoWindow = true;
+            startInfo.WindowStyle = ProcessWindowStyle.Hidden;
+            startInfo.Arguments =
+                "--bridge-server --ready " + QuoteArgument(readyPath);
+
+            using (Process process = Process.Start(startInfo))
+            {
+                if (process == null)
+                {
+                    return;
+                }
+                DateTime deadline = DateTime.UtcNow.AddSeconds(3);
+                while (
+                    !File.Exists(readyPath) &&
+                    !process.HasExited &&
+                    DateTime.UtcNow < deadline
+                )
+                {
+                    Thread.Sleep(25);
+                }
             }
         }
 
