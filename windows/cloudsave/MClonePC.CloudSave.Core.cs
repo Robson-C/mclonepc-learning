@@ -1725,6 +1725,46 @@ namespace MClonePC.CloudSave
             }
         }
 
+        public static bool IsGameRunningAtPath(string executablePath)
+        {
+            string expected = Path.GetFullPath(executablePath);
+            Process[] processes = Process.GetProcessesByName("mclonepc");
+            try
+            {
+                foreach (Process process in processes)
+                {
+                    try
+                    {
+                        string actual = process.MainModule == null
+                            ? null
+                            : process.MainModule.FileName;
+                        if (
+                            !String.IsNullOrWhiteSpace(actual) &&
+                            String.Equals(
+                                Path.GetFullPath(actual),
+                                expected,
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                        )
+                        {
+                            return true;
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+                return false;
+            }
+            finally
+            {
+                foreach (Process process in processes)
+                {
+                    process.Dispose();
+                }
+            }
+        }
+
         public static string GetStateDirectory()
         {
             return Path.Combine(

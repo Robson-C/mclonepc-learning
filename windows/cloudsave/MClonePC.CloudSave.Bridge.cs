@@ -64,6 +64,287 @@ namespace MClonePC.CloudSave
             }
         }
 
+        public static int RunServer(
+            string installRoot,
+            CloudSaveConfig config,
+            string[] args
+        )
+        {
+            string readyPath = GetOption(args, "--ready");
+            EnsureReadyPath(installRoot, readyPath);
+            bool ownsMutex;
+            using (Mutex mutex = new Mutex(
+                true,
+                @"Local\MClonePC.CloudSave.Bridge.v1",
+                out ownsMutex
+            ))
+            {
+                if (!ownsMutex)
+                {
+                    return 0;
+                }
+                try
+                {
+                    AtomicWrite(
+                        readyPath,
+                        Encoding.ASCII.GetBytes("ready")
+                    );
+                    DateTime startupDeadline =
+                        DateTime.UtcNow.AddSeconds(30);
+                    string gameExecutable = Path.Combine(
+                        installRoot,
+                        "game",
+                        "mclonepc.exe"
+                    );
+                    DateTime? gameMissingSince = null;
+                    bool gameWasObserved = false;
+                    while (true)
+                    {
+                        ProcessPendingRequests(installRoot, config);
+                        bool gameRunning =
+                            CloudSaveRuntime.IsGameRunningAtPath(
+                                gameExecutable
+                            );
+                        if (gameRunning)
+                        {
+                            gameWasObserved = true;
+                            gameMissingSince = null;
+                        }
+                        else if (gameWasObserved)
+                        {
+                            if (!gameMissingSince.HasValue)
+                            {
+                                gameMissingSince = DateTime.UtcNow;
+                            }
+                            else if (
+                                DateTime.UtcNow - gameMissingSince.Value >=
+                                    TimeSpan.FromSeconds(2)
+                            )
+                            {
+                                break;
+                            }
+                        }
+                        else if (DateTime.UtcNow >= startupDeadline)
+                        {
+                            break;
+                        }
+                        Thread.Sleep(100);
+                    }
+                    return 0;
+                }
+                finally
+                {
+                    if (File.Exists(readyPath))
+                    {
+                        File.Delete(readyPath);
+                    }
+                    mutex.ReleaseMutex();
+                }
+            }
+        }
+
+        private static void ProcessPendingRequests(
+            string installRoot,
+            CloudSaveConfig config
+        )
+        {
+            string directory = config.GetExpandedSaveDirectory();
+            Directory.CreateDirectory(directory);
+            string[] requests = Directory.GetFiles(
+                directory,
+                ".mclonepc-cloud-request-*.json",
+                SearchOption.TopDirectoryOnly
+            );
+            Array.Sort(requests, StringComparer.OrdinalIgnoreCase);
+            foreach (string requestPath in requests)
+            {
+                string requestId = GetRequestId(requestPath);
+                if (requestId == null)
+                {
+                    continue;
+                }
+                string claimedPath = requestPath + ".processing";
+                try
+                {
+                    File.Move(requestPath, claimedPath);
+                }
+                catch (IOException)
+                {
+                    continue;
+                }
+
+                string resultPath = Path.Combine(
+                    directory,
+                    ".mclonepc-cloud-result-" + requestId + ".json"
+                );
+                string payloadPath = Path.Combine(
+                    directory,
+                    ".mclonepc-cloud-payload-" + requestId + ".json"
+                );
+                try
+                {
+                    FileInfo requestFile = new FileInfo(claimedPath);
+                    if (
+                        requestFile.Length <= 0 ||
+                        requestFile.Length > 65536
+                    )
+                    {
+                        throw new InvalidDataException(
+                            "Tamanho inválido da solicitação de nuvem."
+                        );
+                    }
+                    JavaScriptSerializer serializer =
+                        new JavaScriptSerializer();
+                    Dictionary<string, object> request = serializer.Deserialize<
+                        Dictionary<string, object>
+                    >(File.ReadAllText(claimedPath, Encoding.UTF8));
+                    object schema;
+                    object actionValue;
+                    if (
+                        request == null ||
+                        !request.TryGetValue(
+                            "schema_version",
+                            out schema
+                        ) ||
+                        Convert.ToInt32(schema) != 1 ||
+                        !request.TryGetValue("action", out actionValue)
+                    )
+                    {
+                        throw new InvalidDataException(
+                            "Solicitação de nuvem inválida."
+                        );
+                    }
+                    string action = Convert.ToString(actionValue);
+                    if (!IsAllowedServerAction(action))
+                    {
+                        throw new InvalidDataException(
+                            "Ação de nuvem inválida."
+                        );
+                    }
+                    List<string> bridgeArgs = new List<string>();
+                    bridgeArgs.Add(action);
+                    bridgeArgs.Add("--result");
+                    bridgeArgs.Add(resultPath);
+                    if (
+                        String.Equals(
+                            action,
+                            "upload",
+                            StringComparison.Ordinal
+                        ) ||
+                        String.Equals(
+                            action,
+                            "download",
+                            StringComparison.Ordinal
+                        )
+                    )
+                    {
+                        bridgeArgs.Add("--payload");
+                        bridgeArgs.Add(payloadPath);
+                    }
+                    Run(installRoot, config, bridgeArgs.ToArray());
+                }
+                catch (Exception exception)
+                {
+                    WriteResponse(
+                        resultPath,
+                        false,
+                        null,
+                        exception.Message,
+                        0
+                    );
+                }
+                finally
+                {
+                    if (File.Exists(claimedPath))
+                    {
+                        File.Delete(claimedPath);
+                    }
+                }
+            }
+        }
+
+        private static bool IsAllowedServerAction(string action)
+        {
+            return
+                String.Equals(action, "connect", StringComparison.Ordinal) ||
+                String.Equals(action, "logout", StringComparison.Ordinal) ||
+                String.Equals(action, "verify", StringComparison.Ordinal) ||
+                String.Equals(action, "status", StringComparison.Ordinal) ||
+                String.Equals(action, "upload", StringComparison.Ordinal) ||
+                String.Equals(action, "download", StringComparison.Ordinal);
+        }
+
+        private static string GetRequestId(string requestPath)
+        {
+            const string prefix = ".mclonepc-cloud-request-";
+            const string suffix = ".json";
+            string name = Path.GetFileName(requestPath);
+            if (
+                !name.StartsWith(
+                    prefix,
+                    StringComparison.OrdinalIgnoreCase
+                ) ||
+                !name.EndsWith(
+                    suffix,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                return null;
+            }
+            string requestId = name.Substring(
+                prefix.Length,
+                name.Length - prefix.Length - suffix.Length
+            );
+            if (requestId.Length < 3 || requestId.Length > 80)
+            {
+                return null;
+            }
+            foreach (char character in requestId)
+            {
+                if (
+                    !Char.IsLetterOrDigit(character) &&
+                    character != '-'
+                )
+                {
+                    return null;
+                }
+            }
+            return requestId;
+        }
+
+        private static void EnsureReadyPath(
+            string installRoot,
+            string readyPath
+        )
+        {
+            if (String.IsNullOrWhiteSpace(readyPath))
+            {
+                throw new InvalidDataException(
+                    "Caminho de prontidão da ponte ausente."
+                );
+            }
+            string root = Path.GetFullPath(installRoot).TrimEnd('\\');
+            string stateRoot = Path.Combine(root, "state");
+            string fullReadyPath = Path.GetFullPath(readyPath);
+            if (
+                !fullReadyPath.StartsWith(
+                    stateRoot + Path.DirectorySeparatorChar,
+                    StringComparison.OrdinalIgnoreCase
+                ) ||
+                !String.Equals(
+                    Path.GetFileName(fullReadyPath),
+                    "cloud-bridge.ready",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                throw new InvalidDataException(
+                    "Caminho de prontidão da ponte inválido."
+                );
+            }
+        }
+
         private static async Task<Dictionary<string, object>> ExecuteAsync(
             CloudSaveConfig config,
             string action,

@@ -24,11 +24,52 @@ internal static class FakeGame
             AppDomain.CurrentDomain.BaseDirectory,
             "launcher-test.txt"
         );
+        string installRoot = Directory.GetParent(
+            AppDomain.CurrentDomain.BaseDirectory.TrimEnd(
+                Path.DirectorySeparatorChar
+            )
+        ).FullName;
+        string bridgeState = File.Exists(
+            Path.Combine(installRoot, "state", "cloud-bridge.ready")
+        ) ? "bridge-ready" : "bridge-missing";
+        string documents = Path.Combine(
+            Environment.ExpandEnvironmentVariables("%APPDATA%"),
+            "Robson",
+            "MClonePC",
+            "Documents"
+        );
+        Directory.CreateDirectory(documents);
+        string request = Path.Combine(
+            documents,
+            ".mclonepc-cloud-request-test123.json"
+        );
+        string result = Path.Combine(
+            documents,
+            ".mclonepc-cloud-result-test123.json"
+        );
+        File.WriteAllText(
+            request,
+            "{\"schema_version\":1,\"action\":\"invalid\"}"
+        );
+        DateTime deadline = DateTime.UtcNow.AddSeconds(3);
+        while (!File.Exists(result) && DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(25);
+        }
+        string requestState = File.Exists(result)
+            ? "bridge-request-served"
+            : "bridge-request-missed";
+        if (File.Exists(result))
+        {
+            File.Delete(result);
+        }
+        Thread.Sleep(500);
         File.WriteAllText(
             marker,
-            Directory.GetCurrentDirectory() + "|" + String.Join("|", args)
+            Directory.GetCurrentDirectory() + "|" +
+                String.Join("|", args) + "|" + bridgeState +
+                "|" + requestState
         );
-        Thread.Sleep(100);
         return 0;
     }
 }
@@ -137,6 +178,12 @@ internal static class FakeGame
     $launcherStartInfo.FileName = Join-Path $packageRoot 'MClonePC.exe'
     $launcherStartInfo.UseShellExecute = $false
     $launcherStartInfo.Arguments = '"argumento simples" "com espaco"'
+    $launcherStartInfo.EnvironmentVariables['APPDATA'] = Join-Path (
+        $temporaryRoot
+    ) 'appdata'
+    $launcherStartInfo.EnvironmentVariables['LOCALAPPDATA'] = Join-Path (
+        $temporaryRoot
+    ) 'localappdata'
     $launcher = [System.Diagnostics.Process]::Start($launcherStartInfo)
     $launcher.WaitForExit()
     if ($launcher.ExitCode -ne 0) {
@@ -162,7 +209,12 @@ internal static class FakeGame
     )) {
         throw "Diretório de trabalho divergente: $launcherResult"
     }
-    if ($launcherResult -notmatch '\|argumento simples\|com espaco$') {
+    if (
+        $launcherResult -notmatch (
+            '\|argumento simples\|com espaco\|bridge-ready' +
+            '\|bridge-request-served$'
+        )
+    ) {
         throw "Argumentos divergentes: $launcherResult"
     }
 
@@ -207,6 +259,48 @@ Write-Output 'ATUALIZADOR_FALSO_OK'
         throw 'ZIP ou SHA-256 do pacote portátil ausente.'
     }
 
+    $bridgeReady = Join-Path $packageRoot 'state\cloud-bridge.ready'
+    $bridgeDeadline = (Get-Date).AddSeconds(8)
+    while (
+        (Test-Path -LiteralPath $bridgeReady) -and
+        (Get-Date) -lt $bridgeDeadline
+    ) {
+        Start-Sleep -Milliseconds 100
+    }
+    if (Test-Path -LiteralPath $bridgeReady) {
+        throw 'A ponte de nuvem não encerrou depois do jogo.'
+    }
+    $cloudSaveExecutable = [System.IO.Path]::GetFullPath(
+        (Join-Path $packageRoot 'MClonePC-Save-Nuvem.exe')
+    )
+    $processDeadline = (Get-Date).AddSeconds(5)
+    do {
+        $bridgeProcesses = @(
+            Get-Process 'MClonePC-Save-Nuvem' -ErrorAction SilentlyContinue |
+                Where-Object {
+                    try {
+                        [System.IO.Path]::GetFullPath(
+                            $_.MainModule.FileName
+                        ).Equals(
+                            $cloudSaveExecutable,
+                            [System.StringComparison]::OrdinalIgnoreCase
+                        )
+                    }
+                    catch {
+                        $false
+                    }
+                }
+        )
+        if ($bridgeProcesses.Count -eq 0) {
+            break
+        }
+        Start-Sleep -Milliseconds 100
+    } while ((Get-Date) -lt $processDeadline)
+    if ($bridgeProcesses.Count -ne 0) {
+        throw 'O processo da ponte não encerrou depois do jogo.'
+    }
+    Start-Sleep -Seconds 2
+
     Write-Output 'WINDOWS_PORTABLE_INTEGRATION_OK'
 }
 finally {
@@ -219,7 +313,18 @@ finally {
             $systemTemp,
             [System.StringComparison]::OrdinalIgnoreCase
         )) {
-            Remove-Item -Recurse -Force -LiteralPath $resolvedTemp
+            for ($attempt = 0; $attempt -lt 30; $attempt++) {
+                try {
+                    Remove-Item -Recurse -Force -LiteralPath $resolvedTemp
+                    break
+                }
+                catch {
+                    if ($attempt -eq 29) {
+                        throw
+                    }
+                    Start-Sleep -Milliseconds 200
+                }
+            }
         }
     }
 }

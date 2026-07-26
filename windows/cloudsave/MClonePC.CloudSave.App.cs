@@ -48,6 +48,21 @@ namespace MClonePC.CloudSave
                         args.Skip(1).ToArray()
                     );
                 }
+                if (
+                    args.Length > 0 &&
+                    String.Equals(
+                        args[0],
+                        "--bridge-server",
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    return CloudSaveBridge.RunServer(
+                        root,
+                        config,
+                        args.Skip(1).ToArray()
+                    );
+                }
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Application.Run(new CloudSaveForm(root, config));
