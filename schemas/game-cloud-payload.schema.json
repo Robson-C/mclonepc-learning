@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Robson-C/mclonepc-learning/schemas/game-cloud-payload.schema.json",
+  "title": "MClonePC semantic game cloud save",
+  "type": "object",
+  "required": ["schema_version", "gameData", "info"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "gameData": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "object"}
+      ]
+    },
+    "slot2": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string"},
+        {"type": "object"}
+      ]
+    },
+    "slot3": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string"},
+        {"type": "object"}
+      ]
+    },
+    "info": {"type": "object"},
+    "receipts": {}
+  }
+}

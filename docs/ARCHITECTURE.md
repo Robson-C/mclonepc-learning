@@ -20,8 +20,27 @@ Pacote portátil local
   ZIP acompanhado por SHA-256
 ```
 
-Android continua congelado no escopo atual. O save em nuvem é um utilitário
-externo e manual. Uma falha de rede nunca impede o jogo local de ser aberto.
+Windows e Android são projetos de plataforma separados, mas não mantêm cópias
+independentes do jogo. Os dois recebem o mesmo núcleo versionado, o mesmo
+contrato `mclonepc-game-cloud-v1` e o mesmo nome de objeto remoto
+`mclonepc-game-cloud-v1.json`. Somente empacotamento, assinatura, integração
+OAuth e código estritamente dependente da plataforma podem divergir.
+
+Antes de publicar uma versão conjunta, `verify_platform_pair.py` valida o
+SHA-256 de cada `resource.car`, extrai o CAR do APK e compara todas as entradas
+internas. Somente adaptadores de plataforma previamente declarados podem
+divergir; qualquer diferença no núcleo compartilhado reprova a versão. O gate
+também recusa contratos de save diferentes. Uma falha de rede nunca impede o
+jogo local de ser aberto.
+
+```text
+Núcleo privado versionado
+  resource.car, assets, dados e contrato de save
+             |
+             +-- projeto Windows: PE, launcher e OAuth desktop
+             |
+             +-- projeto Android: APK, assinatura e OAuth Android
+```
 
 ## Fluxo de atualização
 
