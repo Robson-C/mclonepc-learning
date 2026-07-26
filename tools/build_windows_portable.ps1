@@ -53,6 +53,7 @@ $archivePath = Join-Path $output "MClonePC-Portable-Windows-v$Version.zip"
 $archiveHashPath = "$archivePath.sha256"
 $workingRoot = Join-Path $output ('.portable-build-' + [Guid]::NewGuid().ToString('N'))
 $workingPackage = Join-Path $workingRoot $packageName
+$utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
 
 if (-not (Test-Path -LiteralPath $source -PathType Container)) {
     throw "Pasta fonte do jogo ausente: $source"
@@ -109,12 +110,16 @@ $cloudSaveCoreSource = Join-Path (
 $cloudSaveAppSource = Join-Path (
     $repositoryRoot
 ) 'windows\cloudsave\MClonePC.CloudSave.App.cs'
+$cloudSaveBridgeSource = Join-Path (
+    $repositoryRoot
+) 'windows\cloudsave\MClonePC.CloudSave.Bridge.cs'
 foreach ($requiredSource in @(
     $launcherSource,
     $updaterLauncherSource,
     $updaterSource,
     $cloudSaveCoreSource,
-    $cloudSaveAppSource
+    $cloudSaveAppSource,
+    $cloudSaveBridgeSource
 )) {
     if (-not (Test-Path -LiteralPath $requiredSource -PathType Leaf)) {
         throw "Fonte autoral ausente: $requiredSource"
@@ -128,6 +133,19 @@ New-Item -ItemType Directory -Path $workingPackage | Out-Null
 try {
     $gameDestination = Join-Path $workingPackage 'game'
     Copy-Item -Recurse -LiteralPath $source -Destination $gameDestination
+    $gameVersion = [ordered]@{
+        schema_version = 1
+        product = 'MClonePC'
+        version = $Version
+        version_code = $VersionCode
+        channel = 'development'
+        update_source = 'github-releases'
+    }
+    [System.IO.File]::WriteAllText(
+        (Join-Path $gameDestination 'MClonePC.version.json'),
+        ($gameVersion | ConvertTo-Json -Depth 5),
+        $utf8WithoutBom
+    )
 
     New-Item -ItemType Directory -Path (
         Join-Path $workingPackage 'updater'
@@ -212,7 +230,8 @@ try {
     & $compiler @cloudSaveCompilerArguments `
         "/out:$cloudSaveOutput" `
         $cloudSaveCoreSource `
-        $cloudSaveAppSource
+        $cloudSaveAppSource `
+        $cloudSaveBridgeSource
     if ($LASTEXITCODE -ne 0) {
         throw 'Falha ao compilar MClonePC-Save-Nuvem.exe.'
     }
@@ -223,11 +242,11 @@ try {
         google_client_secret = $googleClientSecret
         google_scope = 'https://www.googleapis.com/auth/drive.appdata'
         remote_file_name = 'mclonepc-save-v1.zip'
+        game_remote_file_name = 'mclonepc-game-cloud-v1.json'
         save_directory = '%APPDATA%\Robson\MClonePC\Documents'
     }
     $cloudSaveConfigPath = Join-Path $workingPackage 'cloud-save.json'
     $cloudSaveConfigJson = $cloudSaveConfig | ConvertTo-Json -Depth 5
-    $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText(
         $cloudSaveConfigPath,
         $cloudSaveConfigJson,
@@ -293,9 +312,10 @@ Atualizar:
   Feche o jogo e execute MClonePC-Updater.exe.
 
 Save em nuvem:
-  Feche o jogo e execute MClonePC-Save-Nuvem.exe.
+  No jogo, abra Opções > Salvar na Nuvem.
+  MClonePC-Save-Nuvem.exe continua disponível para backup completo manual.
   A primeira conexão abre o Google no navegador.
-  Enviar e restaurar são sempre ações manuais nesta versão.
+  Salvar e carregar pelo menu do jogo continuam sendo ações manuais.
 
 Esta pasta é independente da pasta de desenvolvimento. Mova ou copie a pasta
 inteira; não mova somente os executáveis.

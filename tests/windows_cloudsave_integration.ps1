@@ -31,6 +31,8 @@ try {
         (Join-Path $repositoryRoot `
             'windows\cloudsave\MClonePC.CloudSave.Core.cs') `
         (Join-Path $repositoryRoot `
+            'windows\cloudsave\MClonePC.CloudSave.Bridge.cs') `
+        (Join-Path $repositoryRoot `
             'tests\MClonePC.CloudSave.SelfTest.cs')
     if ($LASTEXITCODE -ne 0) {
         throw 'Falha ao compilar o teste do save em nuvem.'

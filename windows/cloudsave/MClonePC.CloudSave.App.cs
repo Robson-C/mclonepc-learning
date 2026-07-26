@@ -23,18 +23,33 @@ namespace MClonePC.CloudSave
     internal static class CloudSaveProgram
     {
         [STAThread]
-        private static int Main()
+        private static int Main(string[] args)
         {
             ServicePointManager.SecurityProtocol =
                 SecurityProtocolType.Tls12;
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
             try
             {
                 string root = AppDomain.CurrentDomain.BaseDirectory;
                 CloudSaveConfig config = CloudSaveConfig.Load(
                     Path.Combine(root, "cloud-save.json")
                 );
+                if (
+                    args.Length > 0 &&
+                    String.Equals(
+                        args[0],
+                        "--bridge",
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    return CloudSaveBridge.Run(
+                        root,
+                        config,
+                        args.Skip(1).ToArray()
+                    );
+                }
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
                 Application.Run(new CloudSaveForm(root, config));
                 return 0;
             }
