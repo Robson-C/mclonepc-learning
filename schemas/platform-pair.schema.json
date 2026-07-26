@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Robson-C/mclonepc-learning/schemas/platform-pair.schema.json",
+  "title": "MClonePC linked Windows and Android release",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "version",
+    "version_code",
+    "core",
+    "save",
+    "platforms"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "version_code": {"type": "integer", "minimum": 1},
+    "core": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windows_reference_car_sha256",
+        "allowed_platform_differences"
+      ],
+      "properties": {
+        "windows_reference_car_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "allowed_platform_differences": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "save": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract_id", "schema_version", "remote_file_name"],
+      "properties": {
+        "contract_id": {"const": "mclonepc-game-cloud-v1"},
+        "schema_version": {"const": 1},
+        "remote_file_name": {"const": "mclonepc-game-cloud-v1.json"}
+      }
+    },
+    "platforms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["windows", "android"],
+      "properties": {
+        "windows": {"$ref": "#/$defs/platform"},
+        "android": {"$ref": "#/$defs/platform"}
+      }
+    }
+  },
+  "$defs": {
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "resource_car_sha256", "save_contract_id"],
+      "properties": {
+        "project": {"type": "string", "minLength": 1},
+        "resource_car_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "save_contract_id": {"const": "mclonepc-game-cloud-v1"}
+      }
+    }
+  }
+}

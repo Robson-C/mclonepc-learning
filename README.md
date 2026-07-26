@@ -31,7 +31,11 @@ Bloco inicial concluído:
 - testes automatizados;
 - validação contínua pelo GitHub Actions.
 
-Android continua fora do escopo atual.
+O trabalho Android foi iniciado como um projeto de plataforma separado, preso
+ao mesmo núcleo e ao mesmo contrato de save do Windows. Uma release conjunta
+só é aceita quando o gate compara todas as entradas dos dois `resource.car`,
+recusa divergências fora dos adaptadores de plataforma declarados e confirma
+o contrato `mclonepc-game-cloud-v1`.
 
 ## Testes locais
 
@@ -53,6 +57,20 @@ python tools/build_release_manifest.py `
   --artifact windows-x64=artifacts/MClonePC-Windows.zip `
   --artifact android=artifacts/MClonePC-Android.apk `
   --output artifacts/update.json
+```
+
+## Verificar o par Windows/Android
+
+O manifesto privado do par registra os SHA-256 dos dois CARs, a lista explícita
+de adaptadores permitidos e o mesmo objeto de save no Google Drive. O
+verificador extrai `assets/resource.car` do APK e compara as entradas internas:
+
+```powershell
+python tools/verify_platform_pair.py `
+  --pair "C:\build\platform-pair.json" `
+  --windows-car "C:\build\windows\resource.car" `
+  --android-apk "C:\build\android\MClonePC.apk" `
+  --output "C:\build\platform-pair-verification.json"
 ```
 
 ## Verificar uma release
