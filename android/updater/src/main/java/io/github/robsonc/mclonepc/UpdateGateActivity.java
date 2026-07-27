@@ -65,7 +65,13 @@ public final class UpdateGateActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         createBlackScreen();
+        boolean firstGateInProcess = ProcessUpdateCheckGuard.claim();
         if (getIntent().getBooleanExtra(EXTRA_SKIP_CHECK_ONCE, false)) {
+            launchGame();
+            return;
+        }
+        if (!firstGateInProcess) {
+            Log.i(TAG, "Update check already handled by this process.");
             launchGame();
             return;
         }
