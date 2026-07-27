@@ -109,6 +109,29 @@ class AndroidCloudSavePerformanceTests(unittest.TestCase):
         self.assertIn("clearSessionCache()", self.client_source)
         self.assertIn("REMOTE_FILE_CACHE_MS", self.client_source)
 
+    def test_verify_and_connect_do_not_duplicate_status_lookup(self) -> None:
+        perform_start = self.client_source.index(
+            "private JSONObject perform("
+        )
+        perform_end = self.client_source.index(
+            "private void authorize(",
+            perform_start,
+        )
+        perform = self.client_source[perform_start:perform_end]
+        connection_branch = perform.index('"connect".equals(action)')
+        verify_branch = perform.index('"verify".equals(action)')
+        connected_result = perform.index(
+            'new JSONObject().put("connected", true)'
+        )
+        status_branch = perform.index('"status".equals(action)')
+        status_lookup = perform.index("return getStatus(accessToken);")
+
+        self.assertLess(connection_branch, connected_result)
+        self.assertLess(verify_branch, connected_result)
+        self.assertLess(connected_result, status_branch)
+        self.assertLess(status_branch, status_lookup)
+        self.assertEqual(perform.count("return getStatus(accessToken);"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
