@@ -67,6 +67,8 @@ final class AndroidCloudClient {
         "mclonepc-game-cloud-v1.json";
     private static final int MAXIMUM_PAYLOAD_BYTES = 64 * 1024 * 1024;
     private static final int AUTHENTICATION_ERROR_STATUS = 2001;
+    private static final long ACCESS_TOKEN_CACHE_MS = 50L * 60L * 1000L;
+    private static final long REMOTE_FILE_CACHE_MS = 15L * 1000L;
     private static final AndroidCloudClient INSTANCE =
         new AndroidCloudClient();
 
@@ -74,6 +76,11 @@ final class AndroidCloudClient {
         Executors.newSingleThreadExecutor();
     private final List<Scope> requestedScopes =
         Collections.singletonList(new Scope(DRIVE_SCOPE));
+    private final AccessTokenCache accessTokenCache =
+        new AccessTokenCache(ACCESS_TOKEN_CACHE_MS);
+    private RemoteFile cachedRemoteFile;
+    private boolean cachedRemoteFileKnown;
+    private long cachedRemoteFileAtMs;
 
     static AndroidCloudClient getInstance() {
         return INSTANCE;
@@ -88,6 +95,15 @@ final class AndroidCloudClient {
             disconnect(callback);
             return;
         }
+        executeAuthorizedAction(action, payload, callback, false);
+    }
+
+    private void executeAuthorizedAction(
+        final String action,
+        final String payload,
+        final Callback callback,
+        final boolean retryingAfterRejectedToken
+    ) {
         authorize(
             "connect".equals(action),
             new AuthorizationCallback() {
@@ -106,6 +122,19 @@ final class AndroidCloudClient {
                                     ).toString()
                                 );
                             } catch (Exception exception) {
+                                if (
+                                    !retryingAfterRejectedToken &&
+                                    isRejectedAccessToken(exception)
+                                ) {
+                                    clearSessionCache();
+                                    executeAuthorizedAction(
+                                        action,
+                                        payload,
+                                        callback,
+                                        true
+                                    );
+                                    return;
+                                }
                                 callback.complete(
                                     failure(
                                         safeMessage(exception),
@@ -161,7 +190,10 @@ final class AndroidCloudClient {
             return remoteResult(uploaded);
         }
         if ("download".equals(action)) {
-            RemoteFile remote = findRemoteFile(accessToken);
+            RemoteFile remote = getCachedRemoteFile();
+            if (!isRemoteFileCacheFresh()) {
+                remote = findRemoteFile(accessToken);
+            }
             if (remote == null) {
                 return new JSONObject()
                     .put("connected", true)
@@ -183,6 +215,11 @@ final class AndroidCloudClient {
         final boolean allowResolution,
         final AuthorizationCallback callback
     ) {
+        String accessToken = getCachedAccessToken();
+        if (accessToken != null) {
+            callback.authorized(accessToken);
+            return;
+        }
         final CoronaActivity activity = requireActivity(callback);
         if (activity == null) {
             return;
@@ -301,10 +338,12 @@ final class AndroidCloudClient {
             );
             return;
         }
+        cacheAccessToken(accessToken);
         callback.authorized(accessToken);
     }
 
     private void disconnect(final Callback callback) {
+        clearSessionCache();
         final CoronaActivity activity = requireActivity(
             new AuthorizationCallback() {
                 @Override
@@ -422,9 +461,12 @@ final class AndroidCloudClient {
         );
         JSONArray files = response.optJSONArray("files");
         if (files == null || files.length() == 0) {
+            cacheRemoteFile(null);
             return null;
         }
-        return parseRemote(files.getJSONObject(0));
+        RemoteFile remote = parseRemote(files.getJSONObject(0));
+        cacheRemoteFile(remote);
+        return remote;
     }
 
     private RemoteFile upload(
@@ -486,7 +528,7 @@ final class AndroidCloudClient {
                 "&fields=id,name,modifiedTime,size,appProperties";
             method = "PATCH";
         }
-        return parseRemote(
+        RemoteFile uploaded = parseRemote(
             authorizedJson(
                 url,
                 method,
@@ -495,6 +537,8 @@ final class AndroidCloudClient {
                 accessToken
             )
         );
+        cacheRemoteFile(uploaded);
+        return uploaded;
     }
 
     private byte[] download(
@@ -598,7 +642,8 @@ final class AndroidCloudClient {
         );
         String text = new String(bytes, StandardCharsets.UTF_8);
         if (status < 200 || status >= 300) {
-            throw new IllegalStateException(
+            throw new DriveHttpException(
+                status,
                 "Falha Google Drive (" + status + "): " +
                 safeGoogleError(text)
             );
@@ -616,7 +661,8 @@ final class AndroidCloudClient {
                 : new BufferedInputStream(connection.getErrorStream()),
             2 * 1024 * 1024
         );
-        return new IllegalStateException(
+        return new DriveHttpException(
+            status,
             "Falha Google Drive (" + status + "): " +
             safeGoogleError(new String(bytes, StandardCharsets.UTF_8))
         );
@@ -741,7 +787,47 @@ final class AndroidCloudClient {
     }
 
     private static boolean isAuthenticationError(Exception exception) {
-        return exception instanceof AuthenticationException;
+        return
+            exception instanceof AuthenticationException ||
+            isRejectedAccessToken(exception);
+    }
+
+    private static boolean isRejectedAccessToken(Exception exception) {
+        return
+            exception instanceof DriveHttpException &&
+            ((DriveHttpException) exception).status == 401;
+    }
+
+    private synchronized String getCachedAccessToken() {
+        return accessTokenCache.get();
+    }
+
+    private synchronized void cacheAccessToken(String accessToken) {
+        accessTokenCache.put(accessToken);
+    }
+
+    private synchronized void cacheRemoteFile(RemoteFile remote) {
+        cachedRemoteFile = remote;
+        cachedRemoteFileKnown = true;
+        cachedRemoteFileAtMs = System.currentTimeMillis();
+    }
+
+    private synchronized boolean isRemoteFileCacheFresh() {
+        return
+            cachedRemoteFileKnown &&
+            System.currentTimeMillis() - cachedRemoteFileAtMs <
+                REMOTE_FILE_CACHE_MS;
+    }
+
+    private synchronized RemoteFile getCachedRemoteFile() {
+        return cachedRemoteFile;
+    }
+
+    private synchronized void clearSessionCache() {
+        accessTokenCache.clear();
+        cachedRemoteFile = null;
+        cachedRemoteFileKnown = false;
+        cachedRemoteFileAtMs = 0L;
     }
 
     private static String safeMessage(Exception exception) {
@@ -834,6 +920,15 @@ final class AndroidCloudClient {
     private static final class AuthenticationException extends Exception {
         AuthenticationException(String message) {
             super(message);
+        }
+    }
+
+    private static final class DriveHttpException extends Exception {
+        final int status;
+
+        DriveHttpException(int statusCode, String message) {
+            super(message);
+            status = statusCode;
         }
     }
 }
