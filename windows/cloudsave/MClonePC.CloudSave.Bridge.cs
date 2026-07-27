@@ -20,6 +20,18 @@ namespace MClonePC.CloudSave
             string[] args
         )
         {
+            using (CloudSaveSession session = new CloudSaveSession(config))
+            {
+                return RunWithSession(config, args, session);
+            }
+        }
+
+        private static int RunWithSession(
+            CloudSaveConfig config,
+            string[] args,
+            CloudSaveSession session
+        )
+        {
             string resultPath = GetOption(args, "--result");
             try
             {
@@ -33,7 +45,8 @@ namespace MClonePC.CloudSave
                 Dictionary<string, object> result = ExecuteAsync(
                     config,
                     args[0],
-                    args
+                    args,
+                    session
                 ).GetAwaiter().GetResult();
                 WriteResponse(resultPath, true, result, null, 0);
                 return 0;
@@ -85,50 +98,58 @@ namespace MClonePC.CloudSave
                 }
                 try
                 {
-                    AtomicWrite(
-                        readyPath,
-                        Encoding.ASCII.GetBytes("ready")
-                    );
-                    DateTime startupDeadline =
-                        DateTime.UtcNow.AddSeconds(30);
-                    string gameExecutable = Path.Combine(
-                        installRoot,
-                        "game",
-                        "mclonepc.exe"
-                    );
-                    DateTime? gameMissingSince = null;
-                    bool gameWasObserved = false;
-                    while (true)
+                    using (CloudSaveSession session =
+                        new CloudSaveSession(config))
                     {
-                        ProcessPendingRequests(installRoot, config);
-                        bool gameRunning =
-                            CloudSaveRuntime.IsGameRunningAtPath(
-                                gameExecutable
+                        AtomicWrite(
+                            readyPath,
+                            Encoding.ASCII.GetBytes("ready")
+                        );
+                        DateTime startupDeadline =
+                            DateTime.UtcNow.AddSeconds(30);
+                        string gameExecutable = Path.Combine(
+                            installRoot,
+                            "game",
+                            "mclonepc.exe"
+                        );
+                        DateTime? gameMissingSince = null;
+                        bool gameWasObserved = false;
+                        while (true)
+                        {
+                            ProcessPendingRequests(
+                                config,
+                                session
                             );
-                        if (gameRunning)
-                        {
-                            gameWasObserved = true;
-                            gameMissingSince = null;
-                        }
-                        else if (gameWasObserved)
-                        {
-                            if (!gameMissingSince.HasValue)
+                            bool gameRunning =
+                                CloudSaveRuntime.IsGameRunningAtPath(
+                                    gameExecutable
+                                );
+                            if (gameRunning)
                             {
-                                gameMissingSince = DateTime.UtcNow;
+                                gameWasObserved = true;
+                                gameMissingSince = null;
                             }
-                            else if (
-                                DateTime.UtcNow - gameMissingSince.Value >=
-                                    TimeSpan.FromSeconds(2)
-                            )
+                            else if (gameWasObserved)
+                            {
+                                if (!gameMissingSince.HasValue)
+                                {
+                                    gameMissingSince = DateTime.UtcNow;
+                                }
+                                else if (
+                                    DateTime.UtcNow -
+                                        gameMissingSince.Value >=
+                                        TimeSpan.FromSeconds(2)
+                                )
+                                {
+                                    break;
+                                }
+                            }
+                            else if (DateTime.UtcNow >= startupDeadline)
                             {
                                 break;
                             }
+                            Thread.Sleep(100);
                         }
-                        else if (DateTime.UtcNow >= startupDeadline)
-                        {
-                            break;
-                        }
-                        Thread.Sleep(100);
                     }
                     return 0;
                 }
@@ -144,8 +165,8 @@ namespace MClonePC.CloudSave
         }
 
         private static void ProcessPendingRequests(
-            string installRoot,
-            CloudSaveConfig config
+            CloudSaveConfig config,
+            CloudSaveSession session
         )
         {
             string directory = config.GetExpandedSaveDirectory();
@@ -241,7 +262,11 @@ namespace MClonePC.CloudSave
                         bridgeArgs.Add("--payload");
                         bridgeArgs.Add(payloadPath);
                     }
-                    Run(installRoot, config, bridgeArgs.ToArray());
+                    RunWithSession(
+                        config,
+                        bridgeArgs.ToArray(),
+                        session
+                    );
                 }
                 catch (Exception exception)
                 {
@@ -348,18 +373,16 @@ namespace MClonePC.CloudSave
         private static async Task<Dictionary<string, object>> ExecuteAsync(
             CloudSaveConfig config,
             string action,
-            string[] args
+            string[] args,
+            CloudSaveSession session
         )
         {
-            string stateDirectory = CloudSaveRuntime.GetStateDirectory();
-            OAuthTokenStore tokenStore = new OAuthTokenStore(stateDirectory);
-            using (GoogleOAuthClient oauth =
-                new GoogleOAuthClient(config, tokenStore))
-            using (GoogleDriveAppDataClient drive =
-                new GoogleDriveAppDataClient(oauth))
             using (CancellationTokenSource cancellation =
                 new CancellationTokenSource(TimeSpan.FromMinutes(15)))
             {
+                OAuthTokenStore tokenStore = session.TokenStore;
+                GoogleOAuthClient oauth = session.OAuth;
+                GoogleDriveAppDataClient drive = session.Drive;
                 if (String.Equals(action, "connect", StringComparison.Ordinal))
                 {
                     await oauth.ConnectAsync(cancellation.Token);
@@ -445,6 +468,36 @@ namespace MClonePC.CloudSave
                 throw new InvalidDataException(
                     "Ação desconhecida da ponte de nuvem: " + action
                 );
+            }
+        }
+
+        private sealed class CloudSaveSession : IDisposable
+        {
+            public OAuthTokenStore TokenStore { get; private set; }
+            public GoogleOAuthClient OAuth { get; private set; }
+            public GoogleDriveAppDataClient Drive { get; private set; }
+
+            public CloudSaveSession(CloudSaveConfig config)
+            {
+                string stateDirectory =
+                    CloudSaveRuntime.GetStateDirectory();
+                TokenStore = new OAuthTokenStore(stateDirectory);
+                OAuth = new GoogleOAuthClient(config, TokenStore);
+                Drive = new GoogleDriveAppDataClient(OAuth);
+            }
+
+            public void Dispose()
+            {
+                if (Drive != null)
+                {
+                    Drive.Dispose();
+                    Drive = null;
+                }
+                if (OAuth != null)
+                {
+                    OAuth.Dispose();
+                    OAuth = null;
+                }
             }
         }
 

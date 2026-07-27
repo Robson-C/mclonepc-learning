@@ -336,6 +336,23 @@ public final class UpdateGateActivity extends Activity {
         if (artifact.size > MAX_APK_BYTES) {
             throw new IllegalArgumentException("APK exceeds size limit.");
         }
+        if (ParallelApkDownloader.download(
+            artifact.url,
+            artifact.size,
+            destination,
+            DOWNLOAD_CONNECT_TIMEOUT_MS,
+            DOWNLOAD_READ_TIMEOUT_MS
+        )) {
+            validateDownloadedBytes(artifact, destination);
+            return;
+        }
+        downloadApkSingleStream(artifact, destination);
+    }
+
+    private void downloadApkSingleStream(
+        UpdateArtifact artifact,
+        File destination
+    ) throws Exception {
         HttpURLConnection connection = openConnection(
             artifact.url,
             DOWNLOAD_CONNECT_TIMEOUT_MS,
@@ -383,6 +400,35 @@ public final class UpdateGateActivity extends Activity {
             }
         } finally {
             connection.disconnect();
+        }
+    }
+
+    private void validateDownloadedBytes(
+        UpdateArtifact artifact,
+        File destination
+    ) throws Exception {
+        if (destination.length() != artifact.size) {
+            throw new IllegalStateException(
+                "APK size mismatch: " + destination.length() +
+                " != " + artifact.size
+            );
+        }
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (
+            InputStream input = new BufferedInputStream(
+                new FileInputStream(destination),
+                256 * 1024
+            )
+        ) {
+            byte[] buffer = new byte[256 * 1024];
+            int count;
+            while ((count = input.read(buffer)) >= 0) {
+                digest.update(buffer, 0, count);
+            }
+        }
+        String actualHash = toHex(digest.digest());
+        if (!actualHash.equals(artifact.sha256)) {
+            throw new SecurityException("APK SHA-256 mismatch.");
         }
     }
 
