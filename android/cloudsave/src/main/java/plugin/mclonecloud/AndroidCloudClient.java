@@ -168,9 +168,11 @@ final class AndroidCloudClient {
     ) throws Exception {
         if (
             "connect".equals(action) ||
-            "verify".equals(action) ||
-            "status".equals(action)
+            "verify".equals(action)
         ) {
+            return new JSONObject().put("connected", true);
+        }
+        if ("status".equals(action)) {
             return getStatus(accessToken);
         }
         if ("upload".equals(action)) {
